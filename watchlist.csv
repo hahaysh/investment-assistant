@@ -1,0 +1,9 @@
+ticker,company_name,market,watch_reason,ideal_entry,trigger_condition,invalidation,risk_notes,priority
+035420,NAVER,KRX,AI 검색 전환 + 웹툰·커머스 수익화 / PER 20배 이하면 매수 고려,165000,분기 영업이익 YoY 턴어라운드 확인,라인야후 지분 추가 매각 or 광고 점유율 하락 지속,라인야후 일본 정부 압력 / 단기 이익 가시성 낮음,HIGH
+086790,하나금융지주,KRX,KB·신한 대비 밸류에이션 디스카운트 / 자사주 매입 여력 존재,52000,자사주 소각 발표 or PBR 0.5배 이하 도달,부동산 PF 충당금 추가 적립 → 배당 축소,외환 파생 손실 가능성 / 기업금융 부실,MEDIUM
+373220,LG에너지솔루션,KRX,북미 배터리 공장 가동률 상승 + GM·혼다 JV 흑자 전환,320000,미국 IRA 세액공제 수혜 확정 + 분기 흑자 전환,중국 CATL 점유율 역전 or 전기차 수요 재둔화,CAPEX 부담 극심 / 고객 집중도,MEDIUM
+BAC,Bank of America,NYSE,금리 민감도 높아 인하 사이클 전환 시 NIM 반등 강함,36.0,연준 금리 인하 사이클 진입 공식화,경기침체 신호 강화 → 대손충당금 급증,장기채 미실현손실 여전히 대규모 / 소비자 연체율,HIGH
+META,Meta Platforms,NASDAQ,광고 단가 회복 + Llama 오픈소스 AI 생태계 / Reality Labs 손실 축소 여부,490.0,분기 광고 매출 성장률 20%+ 유지 확인,EU 규제 벌금 대형화 or AI 인프라 CAPEX 급증,개인정보 규제 리스크 / 메타버스 투자 장기화,HIGH
+MSFT,Microsoft,NASDAQ,Azure AI 수익화 + Copilot 기업 구독 확대 / 밸류에이션 부담 해소 시,360.0,Azure 성장률 30%+ 재가속 or PER 30배 이하,OpenAI 관계 악화 or 클라우드 성장 재둔화,현 밸류에이션 PER 35배 이상으로 안전마진 부족,MEDIUM
+030200,KT,KRX,통신 안정 수익 + 데이터센터·AI 인프라 사업 확장,35000,데이터센터 신규 계약 공시 or 배당 확대 발표,경영진 교체 리스크 or 5G 투자 수익화 지연,정부 지분 보유 → 정책 리스크 / 성장 드라이버 불명확,LOW
+XOM,ExxonMobil,NYSE,Pioneer 인수 통합 완료 + Permian Basin FCF 성장 / 배당 성장 52년 연속,105.0,WTI 75달러 이상 안정화 + Permian 생산량 가이던스 상향,WTI 60달러 이하 하락 or 탄소세 강화 입법,에너지 전환 리스크 장기 / 인수 프리미엄 희석,MEDIUM
