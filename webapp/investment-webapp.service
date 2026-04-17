@@ -1,0 +1,26 @@
+[Unit]
+Description=Investment Assistant Web App
+After=network.target
+
+[Service]
+Type=simple
+User=hahaysh
+WorkingDirectory=/home/hahaysh/investment-assistant/webapp
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
+# ── 설치 명령어 ──────────────────────────────────────────────
+# sudo cp investment-webapp.service /etc/systemd/system/
+# sudo systemctl daemon-reload
+# sudo systemctl enable investment-webapp
+# sudo systemctl start investment-webapp
+#
+# ── 상태 확인 ────────────────────────────────────────────────
+# sudo systemctl status investment-webapp
+# journalctl -u investment-webapp -f
