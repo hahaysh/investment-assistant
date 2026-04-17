@@ -1,0 +1,48 @@
+name: Deploy webapp2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'webapp/**'          # webapp/ 변경 시에만 배포 트리거
+  workflow_dispatch:          # 수동 트리거
+
+jobs:
+  deploy:
+    name: SSH Deploy to VM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: hahayshopenclaw.koreacentral.cloudapp.azure.com
+          username: hahaysh
+          key: ${{ secrets.HAHAYSHOPENCLAWSSH }}
+          script: |
+            set -e
+
+            echo "▶ 1) 최신 코드 pull"
+            cd ~/investment-assistant-new
+            git pull origin main
+
+            echo "▶ 2) webapp 파일 배포"
+            cp -r ~/investment-assistant-new/webapp/* ~/webapp2/
+
+            echo "▶ 3) 패키지 설치 (변경분만)"
+            source ~/myenv/bin/activate
+            pip install -r ~/webapp2/requirements.txt -q
+
+            echo "▶ 4) 서비스 재시작"
+            sudo systemctl restart webapp2
+
+            echo "▶ 5) 헬스체크"
+            sleep 2
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8002/api/status)
+            if [ "$STATUS" != "200" ]; then
+              echo "헬스체크 실패 (HTTP $STATUS)"
+              sudo journalctl -u webapp2 -n 30 --no-pager
+              exit 1
+            fi
+            echo "배포 완료 — HTTP $STATUS"
