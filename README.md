@@ -87,7 +87,21 @@ investment-assistant/
         └── index.html               # SPA 프론트엔드 (전체 UI)
 ```
 
-### VM 운영 디렉토리 (`~/investment-assistant/`)
+---
+
+## 사전 요구사항
+
+- Ubuntu 24.04 LTS (Azure VM 기준)
+- Python 3.x + pip
+- OpenClaw 설치 및 실행 중 (`openclaw-gateway` 프로세스)
+- Telegram 봇 연결 완료
+- Azure OpenAI 리소스 (OpenClaw에 연결된 것을 그대로 사용)
+
+---
+
+## Part 1 — OpenClaw 자동화
+
+### VM 운영 디렉토리
 
 ```text
 ~/investment-assistant/
@@ -104,25 +118,49 @@ investment-assistant/
 └── generate_briefing.py        # 브리핑 생성 스크립트
 ```
 
----
+### 자동화 기능
 
-## 완성된 기능
-
-| 구분 | 기능 |
+| 기능 | 일정 |
 | ---- | ---- |
-| **자동화** | 매일 09:00 KST 일일 투자 브리핑 생성 + Telegram 전송 |
-| **자동화** | 매주 월요일 09:10 KST 주간 포트폴리오 리포트 생성 |
-| **웹앱** | 대시보드 — 서버 상태, 최신 리포트 날짜 확인, 브리핑 즉시 실행 |
-| **웹앱** | 브리핑 뷰어 — 일일·주간 마크다운 렌더링 (▲▼ 색상 강조) |
-| **웹앱** | 포트폴리오 현황 — 보유 종목 조회·추가·수정·삭제 |
-| **웹앱** | 관심종목 — 관심 종목 조회·추가·수정·삭제 |
-| **AI** | 포트폴리오 추가 시 yfinance로 회사명·시장·통화 자동채움 |
-| **AI** | 관심종목 추가 시 Azure OpenAI(gpt-4o)로 분석 필드 자동채움 |
-| **CI/CD** | GitHub Actions — push 시 rsync 자동 배포 + 실패 시 자동 롤백 |
+| 일일 투자 브리핑 생성 + Telegram 전송 | 매일 09:00 KST |
+| 주간 포트폴리오 리포트 생성 | 매주 월요일 09:10 KST |
+
+### 설치 순서
+
+| 단계 | 내용 |
+| ---- | ---- |
+| [Step 1](./openclaw/docs/step1-project-setup.md) | 프로젝트 폴더 및 데이터 파일 생성 |
+| [Step 2](./openclaw/docs/step2-skills.md) | OpenClaw 스킬 등록 |
+| [Step 3](./openclaw/docs/step3-briefing-script.md) | 브리핑 생성 Python 스크립트 |
+| [Step 4](./openclaw/docs/step4-cron.md) | cron 자동 스케줄 등록 |
+| [Step 5](./openclaw/docs/step5-test.md) | 테스트 및 검증 |
+
+문제 발생 시 → [troubleshooting.md](./openclaw/docs/troubleshooting.md)
+
+### 수동 실행
+
+```bash
+# 일일 브리핑 즉시 실행
+python3 ~/investment-assistant/generate_briefing.py
+
+# 주간 리포트 즉시 실행
+~/.npm-global/bin/openclaw agent \
+  --to telegram:YOUR_CHAT_ID --deliver \
+  --message "주간 포트폴리오 리포트 생성해줘. ~/investment-assistant/data 참조해서 weekly-portfolio-report 스킬 실행하고 ~/investment-assistant/reports/weekly/$(date +%Y-W%V).md 로 저장해줘."
+```
 
 ---
 
-## 웹앱 상세
+## Part 2 — 웹앱 (webapp2)
+
+### 기능 요약
+
+| 탭 | 기능 |
+| -- | ---- |
+| **대시보드** | 서버 상태, 최신 리포트 날짜 확인, 브리핑 즉시 실행 |
+| **브리핑 뷰어** | 일일·주간 마크다운 렌더링 (▲▼ 색상 강조) |
+| **포트폴리오 현황** | 보유 종목 조회·추가·수정·삭제 |
+| **관심종목** | 관심 종목 조회·추가·수정·삭제 |
 
 ### 백엔드 구조
 
@@ -182,9 +220,7 @@ trigger_condition, invalidation, risk_notes, priority
 
 모든 자동채움은 빈 필드만 채우며, 사용자가 이미 입력한 값은 유지합니다.
 
----
-
-## 주요 API 엔드포인트
+### 주요 API 엔드포인트
 
 | 메서드 | 경로 | 설명 |
 | ------ | ---- | ---- |
@@ -208,35 +244,9 @@ trigger_condition, invalidation, risk_notes, priority
 
 Swagger UI: `http://<VM_IP>:8002/docs`
 
----
+### 실행 방법
 
-## 사전 요구사항
-
-- Ubuntu 24.04 LTS (Azure VM 기준)
-- Python 3.x + pip
-- OpenClaw 설치 및 실행 중 (`openclaw-gateway` 프로세스)
-- Telegram 봇 연결 완료
-- Azure OpenAI 리소스 (OpenClaw에 연결된 것을 그대로 사용)
-
----
-
-## OpenClaw 설치 순서
-
-| 단계 | 내용 |
-| ---- | ---- |
-| [Step 1](./openclaw/docs/step1-project-setup.md) | 프로젝트 폴더 및 데이터 파일 생성 |
-| [Step 2](./openclaw/docs/step2-skills.md) | OpenClaw 스킬 등록 |
-| [Step 3](./openclaw/docs/step3-briefing-script.md) | 브리핑 생성 Python 스크립트 |
-| [Step 4](./openclaw/docs/step4-cron.md) | cron 자동 스케줄 등록 |
-| [Step 5](./openclaw/docs/step5-test.md) | 테스트 및 검증 |
-
-문제 발생 시 → [troubleshooting.md](./openclaw/docs/troubleshooting.md)
-
----
-
-## 웹앱 실행 방법
-
-### 개발 환경 (핫 리로드)
+#### 개발 환경 (핫 리로드)
 
 ```bash
 cd ~/investment-assistant/webapp
@@ -246,7 +256,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 브라우저에서 `http://<VM_IP>:8000` 접속
 
-### 운영 환경 — webapp2 (포트 8002, systemd)
+#### 운영 환경 (포트 8002, systemd)
 
 운영 배포는 GitHub Actions가 자동으로 처리합니다. `main` 브랜치에 `webapp/**` 변경이 push되면 자동 배포됩니다.
 
@@ -297,7 +307,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable webapp2
 ```
 
-### Nginx 리버스 프록시
+#### Nginx 리버스 프록시
 
 ```bash
 sudo apt install -y nginx
@@ -307,13 +317,11 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
----
-
-## GitHub Actions 자동 배포
+### GitHub Actions 자동 배포
 
 `.github/workflows/deploy-webapp2.yml` — `main` 브랜치 push 시 VM에 자동 배포합니다.
 
-### 필요한 GitHub Secrets
+#### 필요한 GitHub Secrets
 
 | Secret | 설명 |
 | ------ | ---- |
@@ -321,7 +329,7 @@ sudo nginx -t && sudo systemctl reload nginx
 | `DEPLOY_SSH_HOST` | VM 공인 IP 또는 FQDN |
 | `DEPLOY_SSH_USER` | VM 로그인 사용자명 |
 
-### 배포 흐름
+#### 배포 흐름
 
 ```text
 push / 수동 트리거
@@ -336,7 +344,7 @@ push / 수동 트리거
   → 7일 지난 백업 자동 삭제
 ```
 
-### 수동 트리거 옵션
+#### 수동 트리거 옵션
 
 GitHub → Actions → `Deploy webapp2 to Azure Linux VM` → `Run workflow`
 
@@ -345,9 +353,7 @@ GitHub → Actions → `Deploy webapp2 to Azure Linux VM` → `Run workflow`
 | `dry_run=true` | rsync 변경 목록만 출력, 실제 배포 없음 |
 | `rollback_on_failure=false` | 실패 시 롤백 건너뜀 |
 
----
-
-## Azure NSG 포트 오픈
+### Azure NSG 포트 오픈
 
 | 항목 | 개발용 | 운영용 |
 | ---- | ------ | ------ |
@@ -358,18 +364,4 @@ GitHub → Actions → `Deploy webapp2 to Azure Linux VM` → `Run workflow`
 
 > 운영 환경에서는 Nginx를 통해 포트 80만 오픈하고 8002는 닫는 것을 권장합니다.
 
----
-
-## 수동 실행
-
-```bash
-# 일일 브리핑 즉시 실행
-python3 ~/investment-assistant/generate_briefing.py
-
-# 주간 리포트 즉시 실행
-~/.npm-global/bin/openclaw agent \
-  --to telegram:YOUR_CHAT_ID --deliver \
-  --message "주간 포트폴리오 리포트 생성해줘. ~/investment-assistant/data 참조해서 weekly-portfolio-report 스킬 실행하고 ~/investment-assistant/reports/weekly/$(date +%Y-W%V).md 로 저장해줘."
-```
-
-> **권장**: 종목 데이터는 웹앱 UI를 통해 관리하세요. CSV를 직접 편집할 경우 반드시 UTF-8 인코딩으로 저장하고 첫 행의 컬럼 헤더를 변경하지 마세요.
+**참고**: 종목 데이터는 웹앱 UI를 통해 관리하세요. CSV를 직접 편집할 경우 반드시 UTF-8 인코딩으로 저장하고 첫 행의 컬럼 헤더를 변경하지 마세요.
