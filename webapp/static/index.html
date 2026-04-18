@@ -38,6 +38,11 @@
       border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff;
       border-radius: 50%; animation: spin 0.6s linear infinite;
     }
+    .spinner-sm {
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid rgba(251,191,36,0.3); border-top-color: #fbbf24;
+      border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Toast ── */
@@ -208,15 +213,22 @@
         <h3 id="modal-watchlist-title" class="text-base font-semibold text-amber-400">종목 추가</h3>
         <button onclick="closeModal('modal-watchlist')" class="text-slate-400 hover:text-white text-xl leading-none">✕</button>
       </div>
+      <!-- AI 분석 상태 표시 -->
+      <div id="wl-ai-status" class="hidden mb-3 flex items-center gap-2 text-xs text-amber-400">
+        <span class="spinner-sm"></span>
+        <span id="wl-ai-status-msg">AI 분석 중...</span>
+      </div>
       <form id="form-watchlist" onsubmit="saveWatchlistForm(event)">
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="form-label">Ticker *</label>
-            <input id="wl-ticker" name="ticker" type="text" required class="form-input uppercase" placeholder="예: TSLA" />
+            <input id="wl-ticker" name="ticker" type="text" required class="form-input uppercase"
+              placeholder="예: TSLA" onblur="autoFillWatchlist('ticker')" />
           </div>
           <div>
             <label class="form-label">종목명 *</label>
-            <input name="company_name" type="text" required class="form-input" placeholder="예: Tesla" />
+            <input id="wl-company-name" name="company_name" type="text" required class="form-input"
+              placeholder="예: Tesla" onblur="autoFillWatchlist('company_name')" />
           </div>
           <div>
             <label class="form-label">시장</label>
@@ -442,6 +454,65 @@ function fillFromWatchlist(ticker) {
   const market = form.elements['market']?.value;
   fill('currency', market === 'KRX' ? 'KRW' : 'USD');
   setModalBtns('form-portfolio', false);
+}
+
+// 관심종목 모달 — ticker 또는 종목명 onblur → AI 자동채움
+let _wlFillLock = false;   // 중복 호출 방지
+
+async function autoFillWatchlist(source) {
+  const tickerEl  = document.getElementById('wl-ticker');
+  const nameEl    = document.getElementById('wl-company-name');
+  const statusEl  = document.getElementById('wl-ai-status');
+  const statusMsg = document.getElementById('wl-ai-status-msg');
+
+  // 수정 모드이면 실행 안 함 (ticker가 readOnly)
+  if (tickerEl.readOnly) return;
+
+  // 두 필드 모두 비어 있으면 건너뜀
+  const query = source === 'ticker'
+    ? tickerEl.value.trim()
+    : nameEl.value.trim();
+  if (!query || _wlFillLock) return;
+
+  // ticker 입력 기반일 때 종목명도 이미 채워져 있으면 굳이 AI 호출 불필요
+  const form = document.getElementById('form-watchlist');
+  const allFilled = ['watch_reason','ideal_entry','trigger_condition','invalidation','risk_notes']
+    .every(n => form.elements[n]?.value.trim());
+  if (allFilled) return;
+
+  _wlFillLock = true;
+  setModalBtns('form-watchlist', true);
+  statusMsg.textContent = 'AI 분석 중...';
+  statusEl.classList.remove('hidden');
+
+  try {
+    const data = await api('GET', `/api/enrich/watchlist/${encodeURIComponent(query)}`);
+
+    const fill = (name, val) => {
+      const el = form.elements[name];
+      if (el && !el.value.trim()) el.value = val ?? '';   // 빈 필드만 채움
+    };
+
+    fill('ticker',            data.ticker);
+    fill('company_name',      data.company_name);
+    fill('market',            data.market);
+    fill('watch_reason',      data.watch_reason);
+    fill('ideal_entry',       data.ideal_entry);
+    fill('trigger_condition', data.trigger_condition);
+    fill('invalidation',      data.invalidation);
+    fill('risk_notes',        data.risk_notes);
+    fill('priority',          data.priority);
+
+    statusMsg.textContent = '분석 완료 — 필요한 항목을 수정하세요.';
+    setTimeout(() => statusEl.classList.add('hidden'), 3000);
+
+  } catch (err) {
+    statusEl.classList.add('hidden');
+    showToast(`AI 자동채움 실패: ${err.message}`, 'error');
+  } finally {
+    setModalBtns('form-watchlist', false);
+    _wlFillLock = false;
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -931,6 +1002,8 @@ let _wlEditTicker = null;
 
 function openWatchlistModal(row = null) {
   _wlEditTicker = row ? row.ticker : null;
+  _wlFillLock   = false;
+  document.getElementById('wl-ai-status').classList.add('hidden');
   document.getElementById('modal-watchlist-title').textContent = row ? '종목 수정' : '종목 추가';
   const form = document.getElementById('form-watchlist');
   form.reset();

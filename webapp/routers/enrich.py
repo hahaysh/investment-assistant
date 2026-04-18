@@ -1,16 +1,18 @@
 """
 GET /api/enrich/{ticker}
+GET /api/enrich/watchlist/{query}
 
-ticker 하나를 받아 yfinance로 종목 정보를 조회하고,
-프론트엔드 자동채움에 필요한 필드를 정제해서 반환한다.
+ticker 또는 종목명을 받아 yfinance + Claude AI로 종목 정보를 조회하고
+프론트엔드 자동채움에 필요한 필드를 반환한다.
 
 오류 구분
-  400  입력값이 잘못됨 (빈 ticker, 너무 긴 문자열 등)
-  502  외부 API(yfinance) 조회 실패 또는 종목 미존재
+  400  입력값이 잘못됨 (빈 값, 너무 긴 문자열 등)
+  502  외부 API(yfinance / Claude) 조회 실패
 """
 
+import json
+import os
 import re
-import time
 import logging
 from typing import Optional
 
@@ -134,6 +136,207 @@ def _derive_currency(info_currency: Optional[str], market: str) -> str:
     if info_currency and info_currency.upper() in ("KRW", "USD", "EUR", "JPY", "HKD", "GBP"):
         return info_currency.upper()
     return "KRW" if market == "KRX" else "USD"
+
+
+# ──────────────────────────────────────────────────────────
+# 관심종목 자동채움 — yfinance + Claude AI
+# ──────────────────────────────────────────────────────────
+
+def _resolve_query_to_ticker(query: str) -> tuple[str, Optional[dict]]:
+    """
+    query가 ticker 형식이면 그대로 사용,
+    종목명처럼 보이면 yf.Search로 ticker 검색.
+    반환: (resolved_ticker, yf_info_or_None)
+    """
+    import yfinance as yf
+
+    # ticker처럼 보이면 바로 시도
+    if re.match(r"^[A-Z0-9.\-]{1,10}$", query.upper()) or re.match(r"^\d{5,6}$", query):
+        ticker = query.upper()
+        is_krx = _is_krx(ticker)
+        candidates = _krx_candidates(ticker) if is_krx else _us_candidates(ticker)
+        for c in candidates:
+            info = _fetch_yf_info(c)
+            if info:
+                return ticker, info
+        return ticker, None
+
+    # 종목명 → yf.Search
+    try:
+        results = yf.Search(query, max_results=3).quotes
+        if results:
+            ticker = results[0].get("symbol", "")
+            if ticker:
+                info = _fetch_yf_info(ticker)
+                return ticker.split(".")[0], info  # .KS 등 suffix 제거
+    except Exception as exc:
+        logger.debug("yf.Search 실패 (%s): %s", query, exc)
+
+    return query.upper(), None
+
+
+def _fetch_news_text(resolved_ticker: str, max_items: int = 5) -> str:
+    """yfinance 뉴스 → 프롬프트용 텍스트. 실패 시 빈 문자열."""
+    try:
+        import yfinance as yf
+        news = yf.Ticker(resolved_ticker).news or []
+        lines = []
+        for i, n in enumerate(news[:max_items], 1):
+            title   = n.get("title", "")
+            summary = n.get("summary") or n.get("description") or ""
+            if title:
+                lines.append(f"{i}. {title}" + (f"\n   {summary}" if summary else ""))
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def _load_azure_config() -> dict:
+    """
+    ~/.openclaw/openclaw.json 에서 Azure OpenAI 접속 정보 읽기.
+    반환: {"api_key": ..., "endpoint": ..., "model": ...}
+    """
+    from pathlib import Path
+
+    config_path = Path.home() / ".openclaw" / "openclaw.json"
+    if not config_path.exists():
+        raise RuntimeError("OpenClaw 설정 파일을 찾을 수 없습니다: ~/.openclaw/openclaw.json")
+
+    with open(config_path, encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    try:
+        provider = cfg["models"]["providers"]["microsoft-foundry"]
+        api_key  = provider["apiKey"]
+        # baseUrl 예: https://xxx.openai.azure.com/openai/v1  → endpoint만 추출
+        base_url = provider["baseUrl"]
+        endpoint = base_url.split("/openai")[0]
+        # 배포된 모델 중 첫 번째 사용 (보통 gpt-4o)
+        model = provider["models"][0]["id"] if provider.get("models") else "gpt-4o"
+    except (KeyError, IndexError) as exc:
+        raise RuntimeError(f"OpenClaw 설정에서 Azure OpenAI 정보를 읽지 못했습니다: {exc}")
+
+    return {"api_key": api_key, "endpoint": endpoint, "model": model}
+
+
+def _call_llm(prompt: str) -> dict:
+    """
+    Azure OpenAI (OpenClaw 설정) 호출 → JSON dict 반환.
+    별도 환경변수 불필요 — ~/.openclaw/openclaw.json을 그대로 사용.
+    """
+    from openai import AzureOpenAI
+
+    cfg = _load_azure_config()
+    client = AzureOpenAI(
+        api_key=cfg["api_key"],
+        azure_endpoint=cfg["endpoint"],
+        api_version="2024-12-01-preview",
+    )
+
+    response = client.chat.completions.create(
+        model=cfg["model"],
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=512,
+        response_format={"type": "json_object"},
+    )
+
+    raw = response.choices[0].message.content.strip()
+    # 혹시 마크다운 코드 블록이 붙어 있으면 제거
+    raw = re.sub(r"^```[a-z]*\n?", "", raw)
+    raw = re.sub(r"\n?```$", "", raw)
+
+    return json.loads(raw)
+
+
+@router.get("/watchlist/{query}")
+async def enrich_watchlist(query: str):
+    """
+    ticker 또는 종목명 → 관심종목 전체 필드 자동채움.
+    yfinance로 종목 정보·뉴스를 수집하고 Claude AI로 필드를 생성한다.
+    """
+    query = query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="ticker 또는 종목명을 입력해주세요.")
+    if len(query) > 50:
+        raise HTTPException(status_code=400, detail="입력값이 너무 깁니다.")
+
+    # ── 1) ticker 해석 + 기본 정보 ───────────────────────
+    ticker, info = _resolve_query_to_ticker(query)
+
+    if info is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"'{query}' 종목 정보를 외부 API에서 가져오지 못했습니다. "
+                   "ticker 또는 종목명을 확인하고 다시 시도해주세요.",
+        )
+
+    is_krx      = _is_krx(ticker)
+    exchange    = (info.get("exchange") or "").upper()
+    market      = _derive_market(exchange, is_krx)
+    currency    = _derive_currency(info.get("currency"), market)
+    price       = (
+        info.get("regularMarketPrice")
+        or info.get("currentPrice")
+        or info.get("previousClose")
+    )
+    company_name = (info.get("shortName") or info.get("longName") or ticker).strip()
+
+    # resolved_ticker: fast_info 경로면 query를 그대로, full info면 exchange suffix 포함
+    resolved_ticker = ticker
+
+    # ── 2) 뉴스 수집 ────────────────────────────────────
+    # KRX는 .KS/.KQ suffix 필요
+    news_ticker = (
+        f"{ticker.zfill(6)}.KS" if is_krx else ticker
+    )
+    news_text = _fetch_news_text(news_ticker)
+
+    # ── 3) Claude AI로 관심종목 필드 생성 ───────────────
+    price_str = f"{price:,.0f} {currency}" if price else "정보 없음"
+    news_section = f"최근 뉴스:\n{news_text}" if news_text else "최근 뉴스: 없음"
+
+    prompt = f"""다음 종목의 정보와 뉴스를 바탕으로 투자 관심종목 등록 정보를 작성해줘.
+
+종목: {ticker} ({company_name})
+시장: {market}
+현재가: {price_str}
+
+{news_section}
+
+아래 JSON 형식으로만 응답해줘. 다른 설명 없이 JSON만:
+{{
+  "watch_reason": "관심 이유 — 핵심 투자 아이디어 중심, 60자 이내, 한국어",
+  "ideal_entry": "이상적 진입가 — 현재가 기준 숫자만 (단위 없음)",
+  "trigger_condition": "매수 트리거 — 구체적 지표나 이벤트, 60자 이내, 한국어",
+  "invalidation": "무효화 조건 — 이 조건 발생 시 관심 철회, 60자 이내, 한국어",
+  "risk_notes": "주요 리스크 — 30자 이내, 한국어",
+  "priority": 우선순위_정수 (1=최고관심, 5=낮음)
+}}"""
+
+    try:
+        ai = _call_llm(prompt)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception as exc:
+        logger.warning("Claude 호출 실패: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        )
+
+    return {
+        "ticker":            ticker,
+        "company_name":      company_name,
+        "market":            market,
+        "currency":          currency,
+        "current_price":     price,
+        "watch_reason":      ai.get("watch_reason", ""),
+        "ideal_entry":       str(ai.get("ideal_entry", "")),
+        "trigger_condition": ai.get("trigger_condition", ""),
+        "invalidation":      ai.get("invalidation", ""),
+        "risk_notes":        ai.get("risk_notes", ""),
+        "priority":          str(ai.get("priority", "3")),
+    }
 
 
 # ──────────────────────────────────────────────────────────

@@ -1,48 +1,213 @@
-name: Deploy webapp2
+name: Deploy webapp2 to Azure Linux VM
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'webapp/**'          # webapp/ 변경 시에만 배포 트리거
-  workflow_dispatch:          # 수동 트리거
+      - 'webapp/**'
+      - '.github/workflows/deploy-webapp2.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "점검 및 rsync 드라이런만 실행 (서비스 재시작 없음)"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      rollback_on_failure:
+        description: "배포 실패 시 자동 롤백 실행"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-webapp2-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DEPLOY_TARGET_DIR: /home/hahaysh/webapp2
+  VENV_PYTHON: /home/hahaysh/myenv/bin/python
+  SERVICE_NAME: webapp2
+  APP_PORT: "8002"
+  BACKUP_RETENTION_DAYS: "7"
 
 jobs:
   deploy:
-    name: SSH Deploy to VM
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: hahayshopenclaw.koreacentral.cloudapp.azure.com
-          username: hahaysh
-          key: ${{ secrets.HAHAYSHOPENCLAWSSH }}
-          script: |
-            set -e
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            echo "▶ 1) 최신 코드 pull"
-            cd ~/investment-assistant-new
-            git pull origin main
+      - name: Validate required secrets
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.HAHAYSHOPENCLAWSSH }}" ]; then
+            echo "Missing secret: HAHAYSHOPENCLAWSSH"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DEPLOY_SSH_HOST }}" ]; then
+            echo "Missing secret: DEPLOY_SSH_HOST"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DEPLOY_SSH_USER }}" ]; then
+            echo "Missing secret: DEPLOY_SSH_USER"
+            exit 1
+          fi
 
-            echo "▶ 2) webapp 파일 배포"
-            cp -r ~/investment-assistant-new/webapp/* ~/webapp2/
+      - name: Prepare SSH key and known_hosts
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf "%s" "${{ secrets.HAHAYSHOPENCLAWSSH }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_SSH_HOST }}" >> ~/.ssh/known_hosts
 
-            echo "▶ 3) 패키지 설치 (변경분만)"
-            source ~/myenv/bin/activate
-            pip install -r ~/webapp2/requirements.txt -q
+      - name: SSH connectivity check
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key \
+            "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" \
+            "echo SSH_OK"
 
-            echo "▶ 4) 서비스 재시작"
+      - name: Set deployment metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          echo "backup_ts=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Remote pre-checks
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
+            set -euo pipefail
+            mkdir -p "/home/hahaysh/webapp2"
+            test -x "/home/hahaysh/myenv/bin/python"
+            command -v rsync >/dev/null 2>&1 || true
+          '
+
+      - name: Backup current webapp
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
+            set -euo pipefail
+            BACKUP_DIR="$HOME/webapp-backups/webapp2-${{ steps.meta.outputs.backup_ts }}"
+            mkdir -p "$HOME/webapp-backups"
+            if [ -d "/home/hahaysh/webapp2" ]; then
+              cp -a "/home/hahaysh/webapp2" "$BACKUP_DIR"
+            fi
+            echo "Backup dir: $BACKUP_DIR"
+          '
+
+      - name: Rsync dry-run
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
+        run: |
+          set -euo pipefail
+          rsync -azvn --delete \
+            --exclude="__pycache__/" \
+            --exclude="*.pyc" \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./webapp/ \
+            "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:$DEPLOY_TARGET_DIR/"
+
+      - name: Rsync webapp to VM
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+          rsync -az --delete \
+            --exclude="__pycache__/" \
+            --exclude="*.pyc" \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./webapp/ \
+            "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:$DEPLOY_TARGET_DIR/"
+
+      - name: Install Python dependencies
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
+            set -euo pipefail
+            cd "/home/hahaysh/webapp2"
+            "/home/hahaysh/myenv/bin/python" -m pip install --upgrade pip -q
+            "/home/hahaysh/myenv/bin/python" -m pip install -r requirements.txt -q
+          '
+
+      - name: Restart service
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
+            set -euo pipefail
             sudo systemctl restart webapp2
+            sudo systemctl is-active --quiet webapp2
+          '
 
-            echo "▶ 5) 헬스체크"
-            sleep 2
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8002/api/status)
-            if [ "$STATUS" != "200" ]; then
-              echo "헬스체크 실패 (HTTP $STATUS)"
-              sudo journalctl -u webapp2 -n 30 --no-pager
+      - name: Health and API checks
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
+            set -euo pipefail
+            for attempt in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:8002/health" >/dev/null \
+                && curl -fsS "http://127.0.0.1:8002/api/status" >/dev/null; then
+                echo "Health checks passed on attempt $attempt"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Health checks failed"
+            exit 1
+          '
+
+      - name: Rollback on failure
+        if: ${{ failure() && (github.event_name != 'workflow_dispatch' || github.event.inputs.rollback_on_failure == 'true') && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true') }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
+            set -euo pipefail
+            BACKUP_DIR="$HOME/webapp-backups/webapp2-${{ steps.meta.outputs.backup_ts }}"
+            if [ ! -d "$BACKUP_DIR" ]; then
+              echo "Rollback backup not found: $BACKUP_DIR"
               exit 1
             fi
-            echo "배포 완료 — HTTP $STATUS"
+            rm -rf "/home/hahaysh/webapp2"
+            cp -a "$BACKUP_DIR" "/home/hahaysh/webapp2"
+            cd "/home/hahaysh/webapp2"
+            "/home/hahaysh/myenv/bin/python" -m pip install -r requirements.txt -q
+            sudo systemctl restart webapp2
+            sudo systemctl is-active --quiet webapp2
+          '
+
+      - name: Service logs
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
+            sudo journalctl -u webapp2 -n 80 --no-pager || true
+          '
+
+      - name: Cleanup old backups
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true') }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
+            set -euo pipefail
+            if [ -d "$HOME/webapp-backups" ]; then
+              find "$HOME/webapp-backups" -mindepth 1 -maxdepth 1 -name "webapp2-*" -type d \
+                -mtime +"7" -exec rm -rf {} +
+            fi
+          '
