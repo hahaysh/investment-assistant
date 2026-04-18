@@ -23,6 +23,19 @@ CSV/마크다운 파일을 직접 읽어 DB 없이 동작합니다.
 
 추가 모달에는 관심종목 목록에서 종목을 선택해 빈 필드를 한 번에 채우는 **"관심종목에서 불러오기"** 드롭다운도 제공됩니다. 이미 포트폴리오에 등록된 종목은 목록에서 자동으로 제외됩니다.
 
+### 관심종목 추가 시 AI 자동채움
+
+관심종목 추가 모달에서 ticker 또는 종목명을 입력하고 포커스를 이동하면 AI가 나머지 필드를 자동으로 채웁니다.
+
+- `GET /api/enrich/watchlist/{query}` 를 호출합니다.
+- yfinance로 종목 정보와 최근 뉴스 5건을 수집한 뒤 Azure OpenAI(gpt-4o)가 한국어로 분석합니다.
+- 생성되는 필드: 관심 이유, 이상적 진입가, 트리거 조건, 무효화 조건, 리스크 노트, 우선순위
+- 빈 필드만 채우므로 사용자가 직접 입력한 값은 유지됩니다.
+- 조회 중에는 "AI 분석 중..." 상태 표시와 함께 저장·취소 버튼이 비활성화됩니다.
+- AI 분석에 실패해도 수동 입력이 가능합니다.
+
+> Azure OpenAI는 VM의 `~/.openclaw/openclaw.json` 설정을 그대로 읽습니다. 별도 환경변수 설정이 필요 없습니다.
+
 ### 버튼 잠금 정책
 
 자동채움이 실행되는 동안(API 조회 중, 관심종목 선택 후 필드 채움 중) 저장·취소 버튼이 비활성화됩니다. 채움이 완료되면 즉시 복구됩니다. 이중 제출을 방지하기 위해 저장 요청 중에도 동일하게 적용됩니다.
@@ -49,22 +62,56 @@ bash ~/investment-assistant/webapp/start.sh
 
 브라우저에서 `http://<VM_IP>:8000` 접속
 
-### 운영 환경 (systemd 서비스)
+### 운영 환경 — webapp2 (포트 8002, systemd)
+
+운영 배포는 GitHub Actions(`deploy-webapp2.yml`)를 통해 자동화되어 있습니다.  
+`main` 브랜치에 `webapp/**` 경로 변경이 push되면 자동 배포됩니다.
 
 ```bash
-# 서비스 파일 배포
-sudo cp ~/investment-assistant/webapp/investment-webapp.service /etc/systemd/system/
-
-# 서비스 등록 및 시작
-sudo systemctl daemon-reload
-sudo systemctl enable investment-webapp
-sudo systemctl start investment-webapp
-
-# 상태 확인
-sudo systemctl status investment-webapp
+# 서비스 상태 확인
+sudo systemctl status webapp2
 
 # 로그 실시간 확인
-journalctl -u investment-webapp -f
+journalctl -u webapp2 -f
+
+# 수동 재시작
+sudo systemctl restart webapp2
+```
+
+#### 초기 서버 설정 (최초 1회)
+
+```bash
+# 1) 저장소 배포 디렉토리 생성
+mkdir -p ~/webapp2
+
+# 2) systemd 서비스 등록
+sudo bash -c 'cat > /etc/systemd/system/webapp2.service << EOF
+[Unit]
+Description=Investment Assistant Web App v2
+After=network.target
+
+[Service]
+Type=simple
+User=hahaysh
+WorkingDirectory=/home/hahaysh/webapp2
+ExecStart=/home/hahaysh/myenv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8002
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF'
+
+# 3) sudo 권한 설정 (GitHub Actions 서비스 재시작용)
+echo "hahaysh ALL=(ALL) NOPASSWD: /bin/systemctl restart webapp2, /bin/systemctl is-active webapp2" \
+  | sudo tee /etc/sudoers.d/webapp2-deploy
+sudo chmod 440 /etc/sudoers.d/webapp2-deploy
+
+# 4) 서비스 등록
+sudo systemctl daemon-reload
+sudo systemctl enable webapp2
 ```
 
 ### Nginx 리버스 프록시 (포트 80으로 서비스)
@@ -86,28 +133,54 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
+## GitHub Actions 자동 배포
+
+`.github/workflows/deploy-webapp2.yml` 워크플로우가 `main` 브랜치 push 시 VM에 자동 배포합니다.
+
+### 필요한 GitHub Secrets
+
+| Secret | 설명 |
+| ------ | ---- |
+| `HAHAYSHOPENCLAWSSH` | VM SSH 개인키 |
+| `DEPLOY_SSH_HOST` | VM 공인 IP 또는 FQDN |
+| `DEPLOY_SSH_USER` | VM 로그인 사용자명 |
+
+### 배포 흐름
+
+```text
+push / 수동 트리거
+  → SSH 연결 확인
+  → 현재 webapp2 백업 (타임스탬프)
+  → rsync ./webapp/ → ~/webapp2/   ← git clone 중간 폴더 없음
+  → pip install -r requirements.txt
+  → systemctl restart webapp2
+  → /health + /api/status 헬스체크 (최대 30회 재시도)
+  → 실패 시 백업에서 자동 롤백
+  → 항상 서비스 로그 80줄 출력
+  → 7일 지난 백업 자동 삭제
+```
+
+### 수동 트리거 옵션
+
+GitHub → Actions → `Deploy webapp2` → `Run workflow`
+
+| 옵션 | 설명 |
+| ---- | ---- |
+| `dry_run=true` | rsync 변경 목록만 출력, 실제 배포 없음 |
+| `rollback_on_failure=false` | 실패 시 롤백 건너뜀 |
+
+---
+
 ## Azure NSG 포트 오픈 방법
 
-포트 8000(개발) 또는 80(운영)을 외부에서 접근하려면 Azure NSG 인바운드 규칙을 추가해야 합니다.
-
-1. Azure 포털 → 해당 VM → **네트워킹** 탭 클릭
-2. **인바운드 포트 규칙 추가** 클릭
-3. 아래 값으로 규칙 설정:
-
-| 항목 | 개발용 | 운영용 |
-| ---- | ------ | ------ |
-| 원본 | Any | Any |
-| 원본 포트 범위 | * | * |
-| 대상 | Any | Any |
-| 대상 포트 범위 | **8000** | **80** |
+| 항목 | 개발용 | webapp2 운영용 |
+| ---- | ------ | -------------- |
+| 대상 포트 범위 | **8000** | **8002** |
 | 프로토콜 | TCP | TCP |
-| 작업 | 허용 | 허용 |
-| 우선순위 | 310 | 300 |
-| 이름 | Allow-8000 | Allow-HTTP |
+| 우선순위 | 310 | 320 |
+| 이름 | Allow-8000 | Allow-8002 |
 
-4. **추가** 클릭 후 적용까지 1~2분 대기
-
-> 보안을 위해 운영 환경에서는 포트 8000을 닫고 Nginx를 통해 포트 80만 오픈하는 것을 권장합니다.
+> 보안을 위해 운영 환경에서는 Nginx를 통해 포트 80만 오픈하고 8002는 닫는 것을 권장합니다.
 
 ---
 
@@ -115,6 +188,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 | 메서드 | 경로 | 설명 |
 | ------ | ---- | ---- |
+| GET | `/health` | 서비스 헬스체크 (배포 자동화용) |
 | GET | `/api/status` | 서버 상태 및 최신 리포트 날짜 |
 | GET | `/api/reports/daily` | 일일 브리핑 목록 |
 | GET | `/api/reports/daily/{date}` | 특정 날짜 브리핑 내용 |
@@ -130,36 +204,47 @@ sudo nginx -t && sudo systemctl reload nginx
 | PUT | `/api/watchlist/{ticker}` | 관심종목 수정 |
 | DELETE | `/api/watchlist/{ticker}` | 관심종목 삭제 |
 | GET | `/api/enrich/{ticker}` | ticker 종목 정보 조회 (yfinance) |
+| GET | `/api/enrich/watchlist/{query}` | ticker·종목명 → AI 관심종목 필드 생성 |
 
-Swagger UI: `http://<VM_IP>:8000/docs`
+Swagger UI: `http://<VM_IP>:8002/docs`
 
 ### enrich API 상세
 
-ticker 하나를 받아 외부 시세 데이터(yfinance)에서 종목 정보를 조회한 뒤 정제해서 반환합니다. 포트폴리오 추가 화면의 자동채움이 이 API를 사용합니다.
+#### `GET /api/enrich/{ticker}` — 포트폴리오 자동채움
+
+ticker 하나를 받아 yfinance에서 종목 정보를 조회한 뒤 반환합니다.
 
 **KRX ticker 후보 전략** — 숫자 5~6자리는 `.KS`(KOSPI) → `.KQ`(KOSDAQ) 순으로 시도합니다. 5자리 ticker는 zero-padding(예: `5930` → `005930.KS`)을 우선 시도합니다.
 
-#### 오류 구분
+| 상태 코드 | 원인 |
+| --------- | ---- |
+| 400 | 빈 ticker, 금지 문자, 20자 초과 |
+| 502 | 모든 후보 ticker에서 yfinance 조회 실패 |
 
-| 상태 코드 | 원인 | detail 예시 |
-| --------- | ---- | ----------- |
-| 400 | 빈 ticker, 금지 문자, 20자 초과 | `"ticker에 허용되지 않는 문자가 포함되어 있습니다: '삼성전자'"` |
-| 502 | 모든 후보 ticker에서 yfinance 조회 실패 | `"'ZZZZZ' 종목 정보를 외부 API에서 가져오지 못했습니다. 시도한 ticker: [...]"` |
+#### `GET /api/enrich/watchlist/{query}` — 관심종목 AI 자동채움
 
-#### 응답 예시
+ticker 또는 종목명을 받아 yfinance 뉴스 + Azure OpenAI(gpt-4o)로 관심종목 전체 필드를 생성합니다.
 
 ```json
 {
-  "ticker": "005930",
-  "resolved_ticker": "005930.KS",
-  "company_name": "Samsung Electronics Co., Ltd.",
-  "market": "KRX",
-  "currency": "KRW",
-  "current_price": 68000,
-  "exchange": "KSC",
-  "price_source": "fast_info"
+  "ticker": "MSFT",
+  "company_name": "Microsoft Corporation",
+  "market": "NASDAQ",
+  "currency": "USD",
+  "current_price": 415.3,
+  "watch_reason": "Azure AI 성장 재가속 + Copilot 수익화 본격화",
+  "ideal_entry": "370",
+  "trigger_condition": "Azure 성장률 30%+ 복귀 + 분기 EPS 컨센서스 상회",
+  "invalidation": "AI 투자 대비 수익화 지연 2분기 연속",
+  "risk_notes": "밸류에이션 부담, 규제 리스크",
+  "priority": "1"
 }
 ```
+
+| 상태 코드 | 원인 |
+| --------- | ---- |
+| 400 | 빈 입력값, 50자 초과 |
+| 502 | yfinance 조회 실패 또는 Azure OpenAI 호출 실패 |
 
 ---
 
