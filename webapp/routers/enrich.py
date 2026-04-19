@@ -248,12 +248,55 @@ def _call_llm(prompt: str) -> dict:
     return json.loads(raw)
 
 
-_LANG_INSTRUCTION = {
-    "ko": "한국어, 60자 이내",
-    "en": "English, within 60 characters",
-    "ja": "日本語、60文字以内",
-    "zh": "中文（简体），60字以内",
-    "fr": "Français, en moins de 60 caractères",
+_LANG_MANDATE = {
+    "ko": "모든 텍스트 값을 반드시 한국어로만 작성하세요.",
+    "en": "Write ALL text values in English only. Do not use any Korean.",
+    "ja": "すべてのテキスト値を必ず日本語のみで記述してください。韓国語は使用しないでください。",
+    "zh": "所有文本值必须仅用中文（简体）书写。不要使用韩语。",
+    "fr": "Rédigez TOUTES les valeurs textuelles en français uniquement. N'utilisez pas le coréen.",
+}
+
+_LANG_FIELD_HINTS = {
+    "ko": {
+        "watch_reason":      "관심 이유 — 핵심 투자 아이디어 중심, 60자 이내",
+        "ideal_entry":       "이상적 진입가 — 현재가 기준 숫자만 (단위 없음)",
+        "trigger_condition": "매수 트리거 — 구체적 지표나 이벤트, 60자 이내",
+        "invalidation":      "무효화 조건 — 이 조건 발생 시 관심 철회, 60자 이내",
+        "risk_notes":        "주요 리스크 — 30자 이내",
+        "priority":          "우선순위 정수 (1=최고관심, 5=낮음)",
+    },
+    "en": {
+        "watch_reason":      "Watch reason — core investment idea, within 60 chars",
+        "ideal_entry":       "Ideal entry price — number only, no units",
+        "trigger_condition": "Buy trigger — specific indicator or event, within 60 chars",
+        "invalidation":      "Invalidation — condition to drop this watchlist item, within 60 chars",
+        "risk_notes":        "Key risks — within 30 chars",
+        "priority":          "Priority integer (1=highest interest, 5=lowest)",
+    },
+    "ja": {
+        "watch_reason":      "関心理由 — 核心的な投資アイデア中心、60文字以内",
+        "ideal_entry":       "理想エントリー価格 — 現在価格基準の数値のみ（単位なし）",
+        "trigger_condition": "買いトリガー — 具体的な指標やイベント、60文字以内",
+        "invalidation":      "無効化条件 — この条件発生時に関心撤回、60文字以内",
+        "risk_notes":        "主要リスク — 30文字以内",
+        "priority":          "優先度整数（1=最高関心、5=低い）",
+    },
+    "zh": {
+        "watch_reason":      "关注原因 — 核心投资理念，60字以内",
+        "ideal_entry":       "理想入场价 — 仅填数字，不含单位",
+        "trigger_condition": "买入触发条件 — 具体指标或事件，60字以内",
+        "invalidation":      "失效条件 — 出现此条件时撤销关注，60字以内",
+        "risk_notes":        "主要风险 — 30字以内",
+        "priority":          "优先级整数（1=最高关注，5=最低）",
+    },
+    "fr": {
+        "watch_reason":      "Raison de surveillance — idée d'investissement clé, 60 caractères max",
+        "ideal_entry":       "Prix d'entrée idéal — nombre uniquement, sans unité",
+        "trigger_condition": "Déclencheur d'achat — indicateur ou événement précis, 60 caractères max",
+        "invalidation":      "Invalidation — condition pour retirer ce titre, 60 caractères max",
+        "risk_notes":        "Risques principaux — 30 caractères max",
+        "priority":          "Entier de priorité (1=intérêt maximal, 5=faible)",
+    },
 }
 
 
@@ -268,7 +311,8 @@ async def enrich_watchlist(query: str, lang: str = "ko"):
         raise HTTPException(status_code=400, detail="ticker 또는 종목명을 입력해주세요.")
     if len(query) > 50:
         raise HTTPException(status_code=400, detail="입력값이 너무 깁니다.")
-    lang_instr = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION["ko"])
+    lang_mandate = _LANG_MANDATE.get(lang, _LANG_MANDATE["ko"])
+    hints = _LANG_FIELD_HINTS.get(lang, _LANG_FIELD_HINTS["ko"])
 
     # ── 1) ticker 해석 + 기본 정보 ───────────────────────
     ticker, info = _resolve_query_to_ticker(query)
@@ -302,25 +346,26 @@ async def enrich_watchlist(query: str, lang: str = "ko"):
     news_text = _fetch_news_text(news_ticker)
 
     # ── 3) Claude AI로 관심종목 필드 생성 ───────────────
-    price_str = f"{price:,.0f} {currency}" if price else "정보 없음"
-    news_section = f"최근 뉴스:\n{news_text}" if news_text else "최근 뉴스: 없음"
+    price_str = f"{price:,.0f} {currency}" if price else "N/A"
+    news_section = f"Recent news:\n{news_text}" if news_text else "Recent news: none"
 
-    prompt = f"""다음 종목의 정보와 뉴스를 바탕으로 투자 관심종목 등록 정보를 작성해줘.
+    prompt = f"""IMPORTANT: {lang_mandate}
 
-종목: {ticker} ({company_name})
-시장: {market}
-현재가: {price_str}
+Stock: {ticker} ({company_name})
+Market: {market}
+Current price: {price_str}
 
 {news_section}
 
-아래 JSON 형식으로만 응답해줘. 다른 설명 없이 JSON만:
+Based on the above, fill in the watchlist registration fields.
+Respond ONLY with valid JSON, no explanation:
 {{
-  "watch_reason": "관심 이유 — 핵심 투자 아이디어 중심, {lang_instr}",
-  "ideal_entry": "이상적 진입가 — 현재가 기준 숫자만 (단위 없음)",
-  "trigger_condition": "매수 트리거 — 구체적 지표나 이벤트, {lang_instr}",
-  "invalidation": "무효화 조건 — 이 조건 발생 시 관심 철회, {lang_instr}",
-  "risk_notes": "주요 리스크 — {lang_instr}",
-  "priority": 우선순위_정수 (1=최고관심, 5=낮음)
+  "watch_reason": "{hints['watch_reason']}",
+  "ideal_entry": "{hints['ideal_entry']}",
+  "trigger_condition": "{hints['trigger_condition']}",
+  "invalidation": "{hints['invalidation']}",
+  "risk_notes": "{hints['risk_notes']}",
+  "priority": {hints['priority']}
 }}"""
 
     try:
