@@ -2,6 +2,12 @@
 
 > 🇰🇷 [한국어 README](README.ko.md)
 
+---
+
+> [!NOTE]
+> **🤖 Built entirely with [Claude](https://claude.ai/code)**
+> Every line of code, configuration, and documentation in this project was written by Claude (Anthropic's AI). No manual coding was involved — from the FastAPI backend and frontend SPA to GitHub Actions pipelines and this README itself.
+
 An automated personal investment management system running on an Azure Linux VM. OpenClaw AI Agent generates daily investment briefings, and a FastAPI web app manages portfolio and watchlist.
 
 > **🌐 Live App:** [http://hahayshopenclaw.koreacentral.cloudapp.azure.com:8002/](http://hahayshopenclaw.koreacentral.cloudapp.azure.com:8002/)

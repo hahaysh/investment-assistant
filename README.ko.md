@@ -2,6 +2,12 @@
 
 > 🇺🇸 [English README](README.md)
 
+---
+
+> [!NOTE]
+> **🤖 이 프로젝트의 모든 작업은 [Claude](https://claude.ai/code)로 이루어졌습니다**
+> FastAPI 백엔드, 프론트엔드 SPA, GitHub Actions 파이프라인, 이 README까지 — 프로젝트의 모든 코드, 설정, 문서는 Anthropic의 AI인 Claude가 작성했습니다. 직접 코딩은 일절 없었습니다.
+
 Azure Linux VM에서 OpenClaw AI Agent가 매일 투자 브리핑을 자동 생성하고, FastAPI 웹앱으로 포트폴리오·관심종목을 관리하는 개인 투자 관리 시스템입니다.
 
 > **🌐 서비스 접속:** [http://hahayshopenclaw.koreacentral.cloudapp.azure.com:8002/](http://hahayshopenclaw.koreacentral.cloudapp.azure.com:8002/)
