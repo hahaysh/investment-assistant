@@ -248,8 +248,17 @@ def _call_llm(prompt: str) -> dict:
     return json.loads(raw)
 
 
+_LANG_INSTRUCTION = {
+    "ko": "한국어, 60자 이내",
+    "en": "English, within 60 characters",
+    "ja": "日本語、60文字以内",
+    "zh": "中文（简体），60字以内",
+    "fr": "Français, en moins de 60 caractères",
+}
+
+
 @router.get("/watchlist/{query}")
-async def enrich_watchlist(query: str):
+async def enrich_watchlist(query: str, lang: str = "ko"):
     """
     ticker 또는 종목명 → 관심종목 전체 필드 자동채움.
     yfinance로 종목 정보·뉴스를 수집하고 Claude AI로 필드를 생성한다.
@@ -259,6 +268,7 @@ async def enrich_watchlist(query: str):
         raise HTTPException(status_code=400, detail="ticker 또는 종목명을 입력해주세요.")
     if len(query) > 50:
         raise HTTPException(status_code=400, detail="입력값이 너무 깁니다.")
+    lang_instr = _LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION["ko"])
 
     # ── 1) ticker 해석 + 기본 정보 ───────────────────────
     ticker, info = _resolve_query_to_ticker(query)
@@ -305,11 +315,11 @@ async def enrich_watchlist(query: str):
 
 아래 JSON 형식으로만 응답해줘. 다른 설명 없이 JSON만:
 {{
-  "watch_reason": "관심 이유 — 핵심 투자 아이디어 중심, 60자 이내, 한국어",
+  "watch_reason": "관심 이유 — 핵심 투자 아이디어 중심, {lang_instr}",
   "ideal_entry": "이상적 진입가 — 현재가 기준 숫자만 (단위 없음)",
-  "trigger_condition": "매수 트리거 — 구체적 지표나 이벤트, 60자 이내, 한국어",
-  "invalidation": "무효화 조건 — 이 조건 발생 시 관심 철회, 60자 이내, 한국어",
-  "risk_notes": "주요 리스크 — 30자 이내, 한국어",
+  "trigger_condition": "매수 트리거 — 구체적 지표나 이벤트, {lang_instr}",
+  "invalidation": "무효화 조건 — 이 조건 발생 시 관심 철회, {lang_instr}",
+  "risk_notes": "주요 리스크 — {lang_instr}",
   "priority": 우선순위_정수 (1=최고관심, 5=낮음)
 }}"""
 

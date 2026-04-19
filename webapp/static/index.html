@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>투자 비서</title>
+  <title data-i18n="nav.title">투자 비서</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
@@ -88,6 +88,15 @@
     .form-input option { background: #1e293b; }
     textarea.form-input { resize: vertical; min-height: 60px; }
     .form-input:read-only { opacity: 0.55; cursor: not-allowed; }
+
+    /* ── Language selector ── */
+    #lang-selector {
+      background: #0f172a; border: 1px solid #475569; color: #94a3b8;
+      font-size: 0.75rem; border-radius: 4px; padding: 0.25rem 0.5rem;
+      cursor: pointer; outline: none;
+    }
+    #lang-selector:hover { border-color: #f59e0b; color: #e2e8f0; }
+    #lang-selector option { background: #1e293b; }
   </style>
 </head>
 <body class="text-slate-200 min-h-screen">
@@ -96,14 +105,26 @@
   <nav class="bg-[#1e293b] border-b border-slate-700 sticky top-0 z-50">
     <div class="max-w-5xl mx-auto px-4">
       <div class="flex items-center h-14 gap-6">
-        <span class="text-amber-400 font-bold text-base whitespace-nowrap">📈 투자 비서</span>
+        <span class="text-amber-400 font-bold text-base whitespace-nowrap">📈 <span data-i18n="nav.title">투자 비서</span></span>
         <div class="flex gap-1">
-          <button id="tab-dashboard" onclick="switchTab('dashboard')"
-            class="tab-btn px-3 py-1.5 rounded text-sm font-medium transition-colors">대시보드</button>
-          <button id="tab-portfolio" onclick="switchTab('portfolio')"
-            class="tab-btn px-3 py-1.5 rounded text-sm font-medium transition-colors">포트폴리오</button>
-          <button id="tab-watchlist" onclick="switchTab('watchlist')"
-            class="tab-btn px-3 py-1.5 rounded text-sm font-medium transition-colors">관심종목</button>
+          <button type="button" id="tab-dashboard" onclick="switchTab('dashboard')"
+            class="tab-btn px-3 py-1.5 rounded text-sm font-medium transition-colors"
+            data-i18n="nav.dashboard">대시보드</button>
+          <button type="button" id="tab-portfolio" onclick="switchTab('portfolio')"
+            class="tab-btn px-3 py-1.5 rounded text-sm font-medium transition-colors"
+            data-i18n="nav.portfolio">포트폴리오</button>
+          <button type="button" id="tab-watchlist" onclick="switchTab('watchlist')"
+            class="tab-btn px-3 py-1.5 rounded text-sm font-medium transition-colors"
+            data-i18n="nav.watchlist">관심종목</button>
+        </div>
+        <div class="ml-auto">
+          <select id="lang-selector" onchange="setLang(this.value)" aria-label="Language / 언어">
+            <option value="ko">한국어</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="zh">中文</option>
+            <option value="fr">Français</option>
+          </select>
         </div>
       </div>
     </div>
@@ -125,80 +146,91 @@
     <div class="modal-box">
       <div class="flex justify-between items-center mb-4">
         <h3 id="modal-portfolio-title" class="text-base font-semibold text-amber-400">종목 추가</h3>
-        <button onclick="closeModal('modal-portfolio')" class="text-slate-400 hover:text-white text-xl leading-none">✕</button>
+        <button type="button" onclick="closeModal('modal-portfolio')" class="text-slate-400 hover:text-white text-xl leading-none">✕</button>
       </div>
       <form id="form-portfolio" onsubmit="savePortfolioForm(event)">
         <!-- 관심종목 불러오기 (추가 모드에서만 표시) -->
         <div id="pf-wl-source-row" class="mb-4 pb-4 border-b border-slate-700 hidden">
-          <label class="form-label">관심종목에서 불러오기</label>
+          <label class="form-label" data-i18n="label.watchlistSource">관심종목에서 불러오기</label>
           <select id="pf-wl-select" onchange="fillFromWatchlist(this.value)" class="form-input">
-            <option value="">— 선택하면 빈 필드 자동채움 —</option>
+            <option value="" data-i18n="placeholder.watchlistSelect">— 선택하면 빈 필드 자동채움 —</option>
           </select>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="form-label">Ticker *</label>
-            <input id="pf-ticker" name="ticker" type="text" required class="form-input uppercase" placeholder="예: 005930" onblur="autoFillPortfolio()" />
+            <label class="form-label" data-i18n="label.ticker">Ticker *</label>
+            <input id="pf-ticker" name="ticker" type="text" required class="form-input uppercase"
+              data-i18n-placeholder="placeholder.tickerPortfolio" placeholder="예: 005930"
+              onblur="autoFillPortfolio()" />
           </div>
           <div>
-            <label class="form-label">종목명 *</label>
-            <input name="company_name" type="text" required class="form-input" placeholder="예: 삼성전자" />
+            <label class="form-label" data-i18n="label.companyName">종목명 *</label>
+            <input name="company_name" type="text" required class="form-input"
+              data-i18n-placeholder="placeholder.companyNamePortfolio" placeholder="예: 삼성전자" />
           </div>
           <div>
-            <label class="form-label">시장</label>
+            <label class="form-label" data-i18n="label.market">시장</label>
             <select name="market" class="form-input">
-              <option value="">선택</option>
+              <option value="" data-i18n="select.placeholder">선택</option>
               <option value="KRX">KRX</option>
               <option value="NYSE">NYSE</option>
               <option value="NASDAQ">NASDAQ</option>
             </select>
           </div>
           <div>
-            <label class="form-label">상태</label>
+            <label class="form-label" data-i18n="label.status">상태</label>
             <select name="holding_status" class="form-input">
-              <option value="">선택</option>
+              <option value="" data-i18n="select.placeholder">선택</option>
               <option value="active">active</option>
               <option value="cash">cash</option>
             </select>
           </div>
           <div>
-            <label class="form-label">수량</label>
-            <input name="quantity" type="text" class="form-input" placeholder="예: 100" />
+            <label class="form-label" data-i18n="label.quantity">수량</label>
+            <input name="quantity" type="text" class="form-input"
+              data-i18n-placeholder="placeholder.quantity" placeholder="예: 100" />
           </div>
           <div>
-            <label class="form-label">평균단가</label>
-            <input name="avg_cost" type="text" class="form-input" placeholder="예: 70000" />
+            <label class="form-label" data-i18n="label.avgCost">평균단가</label>
+            <input name="avg_cost" type="text" class="form-input"
+              data-i18n-placeholder="placeholder.avgCost" placeholder="예: 70000" />
           </div>
           <div>
-            <label class="form-label">통화</label>
+            <label class="form-label" data-i18n="label.currency">통화</label>
             <select name="currency" class="form-input">
-              <option value="">선택</option>
+              <option value="" data-i18n="select.placeholder">선택</option>
               <option value="KRW">KRW</option>
               <option value="USD">USD</option>
             </select>
           </div>
           <div>
-            <label class="form-label">목표비중</label>
-            <input name="target_weight" type="text" class="form-input" placeholder="예: 10%" />
+            <label class="form-label" data-i18n="label.targetWeight">목표비중</label>
+            <input name="target_weight" type="text" class="form-input"
+              data-i18n-placeholder="placeholder.targetWeight" placeholder="예: 10%" />
           </div>
           <div>
-            <label class="form-label">우선순위</label>
-            <input name="priority" type="text" class="form-input" placeholder="예: 1" />
+            <label class="form-label" data-i18n="label.priority">우선순위</label>
+            <input name="priority" type="text" class="form-input"
+              data-i18n-placeholder="placeholder.priority" placeholder="예: 1" />
           </div>
         </div>
         <div class="mt-3">
-          <label class="form-label">투자논리</label>
-          <textarea name="thesis" class="form-input" placeholder="투자 근거..."></textarea>
+          <label class="form-label" data-i18n="label.thesis">투자논리</label>
+          <textarea name="thesis" class="form-input"
+            data-i18n-placeholder="placeholder.thesis" placeholder="투자 근거..."></textarea>
         </div>
         <div class="mt-3">
-          <label class="form-label">리스크 노트</label>
-          <textarea name="risk_notes" class="form-input" placeholder="리스크 요소..."></textarea>
+          <label class="form-label" data-i18n="label.riskNotes">리스크 노트</label>
+          <textarea name="risk_notes" class="form-input"
+            data-i18n-placeholder="placeholder.riskNotes" placeholder="리스크 요소..."></textarea>
         </div>
         <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-slate-700">
           <button type="button" onclick="closeModal('modal-portfolio')"
-            class="px-4 py-2 text-sm text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">취소</button>
+            class="px-4 py-2 text-sm text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+            data-i18n="btn.cancel">취소</button>
           <button type="submit"
-            class="px-4 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg transition-colors">저장</button>
+            class="px-4 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg transition-colors"
+            data-i18n="btn.save">저장</button>
         </div>
       </form>
     </div>
@@ -211,64 +243,74 @@
     <div class="modal-box">
       <div class="flex justify-between items-center mb-4">
         <h3 id="modal-watchlist-title" class="text-base font-semibold text-amber-400">종목 추가</h3>
-        <button onclick="closeModal('modal-watchlist')" class="text-slate-400 hover:text-white text-xl leading-none">✕</button>
+        <button type="button" onclick="closeModal('modal-watchlist')" class="text-slate-400 hover:text-white text-xl leading-none">✕</button>
       </div>
       <!-- AI 분석 상태 표시 -->
       <div id="wl-ai-status" class="hidden mb-3 flex items-center gap-2 text-xs text-amber-400">
         <span class="spinner-sm"></span>
-        <span id="wl-ai-status-msg">AI 분석 중...</span>
+        <span id="wl-ai-status-msg" data-i18n="ai.analyzing">AI 분석 중...</span>
       </div>
       <form id="form-watchlist" onsubmit="saveWatchlistForm(event)">
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="form-label">Ticker *</label>
+            <label class="form-label" data-i18n="label.ticker">Ticker *</label>
             <input id="wl-ticker" name="ticker" type="text" required class="form-input uppercase"
-              placeholder="예: TSLA" onblur="autoFillWatchlist('ticker')" />
+              data-i18n-placeholder="placeholder.tickerWatchlist" placeholder="예: TSLA"
+              onblur="autoFillWatchlist('ticker')" />
           </div>
           <div>
-            <label class="form-label">종목명 *</label>
+            <label class="form-label" data-i18n="label.companyName">종목명 *</label>
             <input id="wl-company-name" name="company_name" type="text" required class="form-input"
-              placeholder="예: Tesla" onblur="autoFillWatchlist('company_name')" />
+              data-i18n-placeholder="placeholder.companyNameWatchlist" placeholder="예: Tesla"
+              onblur="autoFillWatchlist('company_name')" />
           </div>
           <div>
-            <label class="form-label">시장</label>
+            <label class="form-label" data-i18n="label.market">시장</label>
             <select name="market" class="form-input">
-              <option value="">선택</option>
+              <option value="" data-i18n="select.placeholder">선택</option>
               <option value="KRX">KRX</option>
               <option value="NYSE">NYSE</option>
               <option value="NASDAQ">NASDAQ</option>
             </select>
           </div>
           <div>
-            <label class="form-label">이상적 진입가</label>
-            <input name="ideal_entry" type="text" class="form-input" placeholder="예: 200" />
+            <label class="form-label" data-i18n="label.idealEntry">이상적 진입가</label>
+            <input name="ideal_entry" type="text" class="form-input"
+              data-i18n-placeholder="placeholder.idealEntry" placeholder="예: 200" />
           </div>
           <div>
-            <label class="form-label">우선순위</label>
-            <input name="priority" type="text" class="form-input" placeholder="예: 1" />
+            <label class="form-label" data-i18n="label.priority">우선순위</label>
+            <input name="priority" type="text" class="form-input"
+              data-i18n-placeholder="placeholder.priority" placeholder="예: 1" />
           </div>
         </div>
         <div class="mt-3">
-          <label class="form-label">관심 이유</label>
-          <textarea name="watch_reason" class="form-input" placeholder="관심 갖게 된 이유..."></textarea>
+          <label class="form-label" data-i18n="label.watchReason">관심 이유</label>
+          <textarea name="watch_reason" class="form-input"
+            data-i18n-placeholder="placeholder.watchReason" placeholder="관심 갖게 된 이유..."></textarea>
         </div>
         <div class="mt-3">
-          <label class="form-label">트리거 조건</label>
-          <textarea name="trigger_condition" class="form-input" placeholder="매수 진입 트리거..."></textarea>
+          <label class="form-label" data-i18n="label.triggerCondition">트리거 조건</label>
+          <textarea name="trigger_condition" class="form-input"
+            data-i18n-placeholder="placeholder.triggerCondition" placeholder="매수 진입 트리거..."></textarea>
         </div>
         <div class="mt-3">
-          <label class="form-label">무효화 조건</label>
-          <textarea name="invalidation" class="form-input" placeholder="무효화 조건..."></textarea>
+          <label class="form-label" data-i18n="label.invalidation">무효화 조건</label>
+          <textarea name="invalidation" class="form-input"
+            data-i18n-placeholder="placeholder.invalidation" placeholder="무효화 조건..."></textarea>
         </div>
         <div class="mt-3">
-          <label class="form-label">리스크 노트</label>
-          <textarea name="risk_notes" class="form-input" placeholder="리스크 요소..."></textarea>
+          <label class="form-label" data-i18n="label.riskNotes">리스크 노트</label>
+          <textarea name="risk_notes" class="form-input"
+            data-i18n-placeholder="placeholder.riskNotes" placeholder="리스크 요소..."></textarea>
         </div>
         <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-slate-700">
           <button type="button" onclick="closeModal('modal-watchlist')"
-            class="px-4 py-2 text-sm text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">취소</button>
+            class="px-4 py-2 text-sm text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+            data-i18n="btn.cancel">취소</button>
           <button type="submit"
-            class="px-4 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg transition-colors">저장</button>
+            class="px-4 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg transition-colors"
+            data-i18n="btn.save">저장</button>
         </div>
       </form>
     </div>
@@ -279,18 +321,70 @@
   ════════════════════════════════════════════════════════ -->
   <div id="modal-confirm" class="modal-overlay hidden" onclick="backdropClose(event,'modal-confirm')">
     <div class="modal-box" style="max-width:380px">
-      <h3 class="text-base font-semibold text-white mb-2">삭제 확인</h3>
+      <h3 class="text-base font-semibold text-white mb-2" data-i18n="confirm.title">삭제 확인</h3>
       <p id="confirm-msg" class="text-slate-300 text-sm mb-5"></p>
       <div class="flex justify-end gap-2">
-        <button onclick="closeModal('modal-confirm')"
-          class="px-4 py-2 text-sm text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">취소</button>
-        <button id="confirm-ok-btn" onclick="confirmOk()"
-          class="px-4 py-2 text-sm font-semibold bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors">삭제</button>
+        <button type="button" onclick="closeModal('modal-confirm')"
+          class="px-4 py-2 text-sm text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+          data-i18n="btn.cancel">취소</button>
+        <button type="button" id="confirm-ok-btn" onclick="confirmOk()"
+          class="px-4 py-2 text-sm font-semibold bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+          data-i18n="btn.delete">삭제</button>
       </div>
     </div>
   </div>
 
+<script src="translations/ko.js"></script>
+<script src="translations/en.js"></script>
+<script src="translations/ja.js"></script>
+<script src="translations/zh.js"></script>
+<script src="translations/fr.js"></script>
 <script>
+// ════════════════════════════════════════════════════════════
+// i18n
+// ════════════════════════════════════════════════════════════
+window.TRANSLATIONS = window.TRANSLATIONS || {};
+
+function getLang() {
+  return localStorage.getItem('lang') || 'ko';
+}
+
+function t(key, vars = {}) {
+  const lang = getLang();
+  const dict = window.TRANSLATIONS[lang] || window.TRANSLATIONS['ko'] || {};
+  let str = (key in dict) ? dict[key] : ((window.TRANSLATIONS['ko'] || {})[key] ?? key);
+  for (const [k, v] of Object.entries(vars)) {
+    str = str.replace(`{${k}}`, v);
+  }
+  return str;
+}
+
+function applyTranslations() {
+  const lang = getLang();
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+}
+
+function setLang(lang) {
+  localStorage.setItem('lang', lang);
+  document.getElementById('lang-selector').value = lang;
+  applyTranslations();
+  // Re-render currently visible tab to update dynamic text
+  if (S.tab === 'dashboard') {
+    if (S.dashView === 'viewer') renderViewerShell();
+    else renderDashboardList();
+  } else if (S.tab === 'portfolio') {
+    renderPortfolio();
+  } else if (S.tab === 'watchlist') {
+    renderWatchlist();
+  }
+}
+
 // ════════════════════════════════════════════════════════════
 // State
 // ════════════════════════════════════════════════════════════
@@ -314,10 +408,9 @@ let _wlMap = {};
 // Utilities
 // ════════════════════════════════════════════════════════════
 
-// FastAPI 에러를 사람이 읽을 수 있는 문자열로 변환
 function parseApiError(err, status) {
   const d = err?.detail;
-  if (!d) return `서버 오류 (HTTP ${status})`;
+  if (!d) return t('err.server', { status });
   if (typeof d === 'string') return d;
   if (Array.isArray(d)) {
     return d.map(e => {
@@ -349,7 +442,6 @@ function esc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// 모달의 저장/취소 버튼 일괄 활성·비활성
 function setModalBtns(formId, disabled) {
   document.getElementById(formId)
     ?.querySelectorAll('button')
@@ -360,7 +452,6 @@ function setModalBtns(formId, disabled) {
     });
 }
 
-// 포트폴리오 ticker onblur → /api/enrich로 종목 정보 조회 후 빈 필드만 자동채움
 async function autoFillPortfolio() {
   const form   = document.getElementById('form-portfolio');
   const ticker = (document.getElementById('pf-ticker').value || '').trim().toUpperCase();
@@ -373,7 +464,7 @@ async function autoFillPortfolio() {
 
     const fill = (name, val) => {
       const el = form.elements[name];
-      if (el && !el.value) el.value = val ?? '';    // 빈 필드만 채움
+      if (el && !el.value) el.value = val ?? '';
     };
 
     fill('company_name',    data.company_name);
@@ -382,12 +473,8 @@ async function autoFillPortfolio() {
     fill('holding_status',  'active');
 
   } catch (err) {
-    // 502: 외부 API 실패 → 재시도 가능 안내
-    // 400: 입력값 오류 → 그대로 메시지 표시
-    // 네트워크 오류 등도 동일하게 처리
-    showToast(`종목 정보 조회 실패: ${err.message}`, 'error');
+    showToast(t('err.enrichFailed', { msg: err.message }), 'error');
 
-    // API 실패 시에도 heuristic으로 최소 채움 (UX 보호)
     const isKrx = /^\d{5,6}$/.test(ticker);
     const fill  = (name, val) => { const el = form.elements[name]; if (el && !el.value) el.value = val; };
     fill('market',         isKrx ? 'KRX' : 'NASDAQ');
@@ -398,42 +485,40 @@ async function autoFillPortfolio() {
   }
 }
 
-// 숫자 필드 정제·검증 (쉼표 제거, 비숫자 차단)
 function validateNumericFields(data) {
   const result = { ...data };
 
-  // 비음수 정수 필드
-  const intFields = { quantity: '수량', priority: '우선순위' };
-  for (const [field, label] of Object.entries(intFields)) {
+  const intFields = { quantity: 'field.quantity', priority: 'field.priority' };
+  for (const [field, labelKey] of Object.entries(intFields)) {
     if (!result[field]) continue;
+    const label   = t(labelKey);
     const cleaned = String(result[field]).replace(/,/g, '').trim();
     if (!cleaned) { result[field] = ''; continue; }
     const n = Number(cleaned);
     if (isNaN(n) || !Number.isInteger(n)) {
-      throw new Error(`${label}은(는) 정수로 입력해주세요. (입력값: "${result[field]}")`);
+      throw new Error(t('validate.intRequired', { label, val: result[field] }));
     }
-    if (n < 0) throw new Error(`${label}은(는) 0 이상의 값이어야 합니다.`);
+    if (n < 0) throw new Error(t('validate.positiveRequired', { label }));
     result[field] = String(n);
   }
 
-  // 비음수 실수 필드
-  const floatFields = { avg_cost: '평균단가' };
-  for (const [field, label] of Object.entries(floatFields)) {
+  const floatFields = { avg_cost: 'field.avgCost' };
+  for (const [field, labelKey] of Object.entries(floatFields)) {
     if (!result[field]) continue;
+    const label   = t(labelKey);
     const cleaned = String(result[field]).replace(/,/g, '').trim();
     if (!cleaned) { result[field] = ''; continue; }
     const n = Number(cleaned);
     if (isNaN(n)) {
-      throw new Error(`${label}은(는) 숫자로 입력해주세요. (입력값: "${result[field]}")`);
+      throw new Error(t('validate.numberRequired', { label, val: result[field] }));
     }
-    if (n < 0) throw new Error(`${label}은(는) 0 이상의 값이어야 합니다.`);
+    if (n < 0) throw new Error(t('validate.positiveRequired', { label }));
     result[field] = String(n);
   }
 
   return result;
 }
 
-// 관심종목 선택 → 포트폴리오 폼의 빈 필드 자동채움
 function fillFromWatchlist(ticker) {
   if (!ticker) return;
   const wl = S.watchlistData.find(r => r.ticker.toUpperCase() === ticker.toUpperCase());
@@ -450,14 +535,12 @@ function fillFromWatchlist(ticker) {
   fill('thesis',       wl.watch_reason);
   fill('risk_notes',   wl.risk_notes);
   fill('priority',     wl.priority);
-  // 시장이 채워진 뒤 통화 자동유추
   const market = form.elements['market']?.value;
   fill('currency', market === 'KRX' ? 'KRW' : 'USD');
   setModalBtns('form-portfolio', false);
 }
 
-// 관심종목 모달 — ticker 또는 종목명 onblur → AI 자동채움
-let _wlFillLock = false;   // 중복 호출 방지
+let _wlFillLock = false;
 
 async function autoFillWatchlist(source) {
   const tickerEl  = document.getElementById('wl-ticker');
@@ -465,16 +548,13 @@ async function autoFillWatchlist(source) {
   const statusEl  = document.getElementById('wl-ai-status');
   const statusMsg = document.getElementById('wl-ai-status-msg');
 
-  // 수정 모드이면 실행 안 함 (ticker가 readOnly)
   if (tickerEl.readOnly) return;
 
-  // 두 필드 모두 비어 있으면 건너뜀
   const query = source === 'ticker'
     ? tickerEl.value.trim()
     : nameEl.value.trim();
   if (!query || _wlFillLock) return;
 
-  // ticker 입력 기반일 때 종목명도 이미 채워져 있으면 굳이 AI 호출 불필요
   const form = document.getElementById('form-watchlist');
   const allFilled = ['watch_reason','ideal_entry','trigger_condition','invalidation','risk_notes']
     .every(n => form.elements[n]?.value.trim());
@@ -482,15 +562,15 @@ async function autoFillWatchlist(source) {
 
   _wlFillLock = true;
   setModalBtns('form-watchlist', true);
-  statusMsg.textContent = 'AI 분석 중...';
+  statusMsg.textContent = t('ai.analyzing');
   statusEl.classList.remove('hidden');
 
   try {
-    const data = await api('GET', `/api/enrich/watchlist/${encodeURIComponent(query)}`);
+    const data = await api('GET', `/api/enrich/watchlist/${encodeURIComponent(query)}?lang=${getLang()}`);
 
     const fill = (name, val) => {
       const el = form.elements[name];
-      if (el && !el.value.trim()) el.value = val ?? '';   // 빈 필드만 채움
+      if (el && !el.value.trim()) el.value = val ?? '';
     };
 
     fill('ticker',            data.ticker);
@@ -503,12 +583,12 @@ async function autoFillWatchlist(source) {
     fill('risk_notes',        data.risk_notes);
     fill('priority',          data.priority);
 
-    statusMsg.textContent = '분석 완료 — 필요한 항목을 수정하세요.';
+    statusMsg.textContent = t('ai.complete');
     setTimeout(() => statusEl.classList.add('hidden'), 3000);
 
   } catch (err) {
     statusEl.classList.add('hidden');
-    showToast(`AI 자동채움 실패: ${err.message}`, 'error');
+    showToast(t('err.aiFailed', { msg: err.message }), 'error');
   } finally {
     setModalBtns('form-watchlist', false);
     _wlFillLock = false;
@@ -626,28 +706,28 @@ function renderDashboardList() {
   document.getElementById('view-dashboard').innerHTML = `
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
       <div class="bg-[#1e293b] border border-slate-700 rounded-xl p-5">
-        <p class="text-slate-400 text-xs mb-1 uppercase tracking-wide">최신 일일 브리핑</p>
+        <p class="text-slate-400 text-xs mb-1 uppercase tracking-wide">${t('dashboard.latestDaily')}</p>
         <p class="text-amber-400 text-2xl font-bold">${s.last_daily ?? '—'}</p>
       </div>
       <div class="bg-[#1e293b] border border-slate-700 rounded-xl p-5">
-        <p class="text-slate-400 text-xs mb-1 uppercase tracking-wide">최신 주간 리포트</p>
+        <p class="text-slate-400 text-xs mb-1 uppercase tracking-wide">${t('dashboard.latestWeekly')}</p>
         <p class="text-amber-400 text-2xl font-bold">${s.last_weekly ?? '—'}</p>
       </div>
     </div>
     <div class="flex flex-wrap gap-3 mb-8">
       <button id="btn-run-daily" onclick="runBriefing(this)"
         class="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold px-5 py-2.5 rounded-lg transition-colors text-sm">
-        ▶ 일일 브리핑 실행
+        ${t('btn.runDailyBriefing')}
       </button>
       <button id="btn-run-weekly" onclick="runBriefing(this)"
         class="flex items-center gap-2 bg-slate-600 hover:bg-slate-500 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors text-sm">
-        ▶ 주간 리포트 실행
+        ${t('btn.runWeeklyReport')}
       </button>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
         <h2 class="text-slate-300 font-semibold text-sm mb-3 flex items-center gap-2">
-          <span class="text-amber-400">◆</span> 일일 브리핑 목록
+          <span class="text-amber-400">◆</span> ${t('dashboard.dailyList')}
         </h2>
         <div class="space-y-2">
           ${S.dailyReports.length
@@ -655,14 +735,14 @@ function renderDashboardList() {
               <button onclick="openViewer('daily','${r.date}')"
                 class="w-full text-left bg-[#1e293b] hover:bg-slate-700 border border-slate-700 rounded-lg px-4 py-3 text-sm transition-colors flex justify-between items-center group">
                 <span class="text-slate-200">${r.date}</span>
-                <span class="text-slate-500 group-hover:text-amber-400 text-xs transition-colors">보기 →</span>
+                <span class="text-slate-500 group-hover:text-amber-400 text-xs transition-colors">${t('report.view')}</span>
               </button>`).join('')
-            : '<p class="text-slate-500 text-sm py-2">리포트가 없습니다.</p>'}
+            : `<p class="text-slate-500 text-sm py-2">${t('report.empty')}</p>`}
         </div>
       </div>
       <div>
         <h2 class="text-slate-300 font-semibold text-sm mb-3 flex items-center gap-2">
-          <span class="text-amber-400">◆</span> 주간 리포트 목록
+          <span class="text-amber-400">◆</span> ${t('dashboard.weeklyList')}
         </h2>
         <div class="space-y-2">
           ${S.weeklyReports.length
@@ -670,9 +750,9 @@ function renderDashboardList() {
               <button onclick="openViewer('weekly','${r.week}')"
                 class="w-full text-left bg-[#1e293b] hover:bg-slate-700 border border-slate-700 rounded-lg px-4 py-3 text-sm transition-colors flex justify-between items-center group">
                 <span class="text-slate-200">${r.week}</span>
-                <span class="text-slate-500 group-hover:text-amber-400 text-xs transition-colors">보기 →</span>
+                <span class="text-slate-500 group-hover:text-amber-400 text-xs transition-colors">${t('report.view')}</span>
               </button>`).join('')
-            : '<p class="text-slate-500 text-sm py-2">리포트가 없습니다.</p>'}
+            : `<p class="text-slate-500 text-sm py-2">${t('report.empty')}</p>`}
         </div>
       </div>
     </div>`;
@@ -681,12 +761,12 @@ function renderDashboardList() {
 async function runBriefing(btn) {
   const orig = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = `<span class="spinner"></span> 실행 중...`;
+  btn.innerHTML = `<span class="spinner"></span> ${t('btn.running')}`;
   try {
     await api('POST', '/api/run-briefing');
-    showToast('브리핑 생성을 시작했습니다.', 'success');
+    showToast(t('toast.briefingStarted'), 'success');
   } catch (e) {
-    showToast(`오류: ${e.message}`, 'error');
+    showToast(t('err.generic', { msg: e.message }), 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = orig;
@@ -712,12 +792,12 @@ function renderViewerShell() {
   }).join('');
   document.getElementById('view-dashboard').innerHTML = `
     <div class="flex flex-wrap items-center gap-3 mb-5">
-      <button onclick="renderDashboardList()" class="text-slate-400 hover:text-white text-sm transition-colors">← 목록으로</button>
+      <button onclick="renderDashboardList()" class="text-slate-400 hover:text-white text-sm transition-colors">${t('btn.backToList')}</button>
       <div class="flex bg-[#1e293b] border border-slate-700 rounded-lg p-0.5 gap-0.5">
         <button onclick="switchViewerType('daily')"
-          class="px-3 py-1 rounded text-sm font-medium transition-colors ${isDaily ? 'bg-amber-500 text-slate-900' : 'text-slate-300 hover:bg-slate-700'}">일일</button>
+          class="px-3 py-1 rounded text-sm font-medium transition-colors ${isDaily ? 'bg-amber-500 text-slate-900' : 'text-slate-300 hover:bg-slate-700'}">${t('viewer.daily')}</button>
         <button onclick="switchViewerType('weekly')"
-          class="px-3 py-1 rounded text-sm font-medium transition-colors ${!isDaily ? 'bg-amber-500 text-slate-900' : 'text-slate-300 hover:bg-slate-700'}">주간</button>
+          class="px-3 py-1 rounded text-sm font-medium transition-colors ${!isDaily ? 'bg-amber-500 text-slate-900' : 'text-slate-300 hover:bg-slate-700'}">${t('viewer.weekly')}</button>
       </div>
       <select id="viewer-select" onchange="selectViewerItem(this.value)"
         class="bg-[#1e293b] border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-400">
@@ -741,7 +821,7 @@ async function fetchViewerContent() {
     const data = await api('GET', path);
     body.innerHTML = renderMarkdown(data.content);
   } catch (e) {
-    body.innerHTML = `<p class="text-red-400 text-sm">오류: ${e.message}</p>`;
+    body.innerHTML = `<p class="text-red-400 text-sm">${t('err.generic', { msg: e.message })}</p>`;
   }
 }
 function switchViewerType(type) {
@@ -766,40 +846,39 @@ async function loadPortfolio() {
     S.portfolioData = await api('GET', '/api/portfolio');
     renderPortfolio();
   } catch (e) {
-    el.innerHTML = `<p class="text-red-400 text-sm">오류: ${e.message}</p>`;
+    el.innerHTML = `<p class="text-red-400 text-sm">${t('err.generic', { msg: e.message })}</p>`;
   }
 }
 
 function renderPortfolio() {
   const el   = document.getElementById('view-portfolio');
   const data = S.portfolioData;
-  // Build lookup map for modal
   _pfMap = {};
   data.forEach(r => { _pfMap[r.ticker] = r; });
 
   el.innerHTML = `
     <div class="flex justify-between items-center mb-5">
-      <h2 class="text-lg font-semibold text-amber-400">포트폴리오 현황</h2>
+      <h2 class="text-lg font-semibold text-amber-400">${t('portfolio.title')}</h2>
       <button onclick="openPortfolioModal()"
         class="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
-        + 종목 추가
+        ${t('btn.addStock')}
       </button>
     </div>
     ${data.length === 0
-      ? '<div class="text-center py-20 text-slate-400 text-sm">보유 종목이 없습니다. 위 버튼으로 추가해보세요.</div>'
+      ? `<div class="text-center py-20 text-slate-400 text-sm">${t('portfolio.empty')}</div>`
       : `<div class="overflow-x-auto rounded-xl border border-slate-700">
           <table class="w-full text-sm whitespace-nowrap">
             <thead class="bg-[#1e3a5f]">
               <tr>
-                <th class="px-4 py-3 text-left text-amber-400 font-semibold">티커</th>
-                <th class="px-4 py-3 text-left text-amber-400 font-semibold">종목명</th>
-                <th class="px-4 py-3 text-left text-amber-400 font-semibold">시장</th>
-                <th class="px-4 py-3 text-right text-amber-400 font-semibold">수량</th>
-                <th class="px-4 py-3 text-right text-amber-400 font-semibold">평단(통화)</th>
-                <th class="px-4 py-3 text-center text-amber-400 font-semibold">목표비중</th>
-                <th class="px-4 py-3 text-center text-amber-400 font-semibold">상태</th>
-                <th class="px-4 py-3 text-center text-amber-400 font-semibold">수정</th>
-                <th class="px-4 py-3 text-center text-amber-400 font-semibold">삭제</th>
+                <th class="px-4 py-3 text-left text-amber-400 font-semibold">${t('col.ticker')}</th>
+                <th class="px-4 py-3 text-left text-amber-400 font-semibold">${t('col.name')}</th>
+                <th class="px-4 py-3 text-left text-amber-400 font-semibold">${t('col.market')}</th>
+                <th class="px-4 py-3 text-right text-amber-400 font-semibold">${t('col.quantity')}</th>
+                <th class="px-4 py-3 text-right text-amber-400 font-semibold">${t('col.avgCost')}</th>
+                <th class="px-4 py-3 text-center text-amber-400 font-semibold">${t('col.targetWeight')}</th>
+                <th class="px-4 py-3 text-center text-amber-400 font-semibold">${t('col.status')}</th>
+                <th class="px-4 py-3 text-center text-amber-400 font-semibold">${t('btn.edit')}</th>
+                <th class="px-4 py-3 text-center text-amber-400 font-semibold">${t('btn.delete')}</th>
               </tr>
             </thead>
             <tbody>
@@ -824,13 +903,13 @@ function renderPortfolio() {
                   <td class="px-4 py-3 text-center">
                     <button onclick="openPortfolioModal(_pfMap['${esc(r.ticker)}'])"
                       class="text-slate-400 hover:text-amber-400 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors">
-                      수정
+                      ${t('btn.edit')}
                     </button>
                   </td>
                   <td class="px-4 py-3 text-center">
                     <button onclick="confirmDeletePortfolio('${esc(r.ticker)}')"
                       class="text-slate-400 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors">
-                      삭제
+                      ${t('btn.delete')}
                     </button>
                   </td>
                 </tr>`).join('')}
@@ -843,7 +922,7 @@ let _pfEditTicker = null;
 
 async function openPortfolioModal(row = null) {
   _pfEditTicker = row ? row.ticker : null;
-  document.getElementById('modal-portfolio-title').textContent = row ? '종목 수정' : '종목 추가';
+  document.getElementById('modal-portfolio-title').textContent = row ? t('modal.editStock') : t('modal.addStock');
   const form = document.getElementById('form-portfolio');
   form.reset();
   const tickerInput   = document.getElementById('pf-ticker');
@@ -851,7 +930,6 @@ async function openPortfolioModal(row = null) {
   const wlSelect      = document.getElementById('pf-wl-select');
 
   if (row) {
-    // 수정 모드 — 관심종목 드롭다운 숨김, ticker 읽기전용
     wlSourceRow.classList.add('hidden');
     setModalBtns('form-portfolio', true);
     Object.entries(row).forEach(([k, v]) => {
@@ -861,20 +939,16 @@ async function openPortfolioModal(row = null) {
     tickerInput.readOnly = true;
     setModalBtns('form-portfolio', false);
   } else {
-    // 추가 모드 — 관심종목 드롭다운 표시 및 채움
     tickerInput.readOnly = false;
 
-    // watchlistData 없으면 로드
     if (!S.watchlistData || S.watchlistData.length === 0) {
       try { S.watchlistData = await api('GET', '/api/watchlist'); } catch (_) { S.watchlistData = []; }
     }
 
-    // 이미 포트폴리오에 있는 ticker 제외
     const pfTickers = new Set((S.portfolioData || []).map(r => r.ticker.toUpperCase()));
     const available = S.watchlistData.filter(r => !pfTickers.has(r.ticker.toUpperCase()));
 
-    // 드롭다운 옵션 재구성
-    wlSelect.innerHTML = '<option value="">— 선택하면 빈 필드 자동채움 —</option>';
+    wlSelect.innerHTML = `<option value="">${t('placeholder.watchlistSelect')}</option>`;
     available.forEach(r => {
       const opt = document.createElement('option');
       opt.value = r.ticker;
@@ -893,13 +967,13 @@ async function savePortfolioForm(e) {
   const form = document.getElementById('form-portfolio');
   let data = Object.fromEntries(new FormData(form));
   try {
-    data = validateNumericFields(data);  // 숫자 필드 정제·검증
+    data = validateNumericFields(data);
     if (_pfEditTicker) {
       await api('PUT', `/api/portfolio/${_pfEditTicker}`, data);
-      showToast('종목이 수정되었습니다.', 'success');
+      showToast(t('toast.stockUpdated'), 'success');
     } else {
       await api('POST', '/api/portfolio', data);
-      showToast('종목이 추가되었습니다.', 'success');
+      showToast(t('toast.stockAdded'), 'success');
     }
     closeModal('modal-portfolio');
     await loadPortfolio();
@@ -909,10 +983,10 @@ async function savePortfolioForm(e) {
 }
 
 function confirmDeletePortfolio(ticker) {
-  openConfirm(`"${ticker}" 종목을 삭제하시겠습니까?`, async () => {
+  openConfirm(t('confirm.deletePortfolio', { ticker }), async () => {
     try {
       await api('DELETE', `/api/portfolio/${ticker}`);
-      showToast('종목이 삭제되었습니다.', 'success');
+      showToast(t('toast.stockDeleted'), 'success');
       await loadPortfolio();
     } catch (err) {
       showToast(err.message, 'error');
@@ -930,27 +1004,26 @@ async function loadWatchlist() {
     S.watchlistData = await api('GET', '/api/watchlist');
     renderWatchlist();
   } catch (e) {
-    el.innerHTML = `<p class="text-red-400 text-sm">오류: ${e.message}</p>`;
+    el.innerHTML = `<p class="text-red-400 text-sm">${t('err.generic', { msg: e.message })}</p>`;
   }
 }
 
 function renderWatchlist() {
   const el   = document.getElementById('view-watchlist');
   const data = S.watchlistData;
-  // Build lookup map
   _wlMap = {};
   data.forEach(r => { _wlMap[r.ticker] = r; });
 
   el.innerHTML = `
     <div class="flex justify-between items-center mb-5">
-      <h2 class="text-lg font-semibold text-amber-400">관심종목 현황</h2>
+      <h2 class="text-lg font-semibold text-amber-400">${t('watchlist.title')}</h2>
       <button onclick="openWatchlistModal()"
         class="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
-        + 종목 추가
+        ${t('btn.addStock')}
       </button>
     </div>
     ${data.length === 0
-      ? '<div class="text-center py-20 text-slate-400 text-sm">관심 종목이 없습니다. 위 버튼으로 추가해보세요.</div>'
+      ? `<div class="text-center py-20 text-slate-400 text-sm">${t('watchlist.empty')}</div>`
       : `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${data.map(r => `
             <div class="bg-[#1e293b] border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors">
@@ -966,31 +1039,31 @@ function renderWatchlist() {
                 </div>
                 <div class="flex gap-1 shrink-0 ml-2">
                   <button onclick="openWatchlistModal(_wlMap['${esc(r.ticker)}'])"
-                    class="text-slate-400 hover:text-amber-400 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors">수정</button>
+                    class="text-slate-400 hover:text-amber-400 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors">${t('btn.edit')}</button>
                   <button onclick="confirmDeleteWatchlist('${esc(r.ticker)}')"
-                    class="text-slate-400 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors">삭제</button>
+                    class="text-slate-400 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors">${t('btn.delete')}</button>
                 </div>
               </div>
               <!-- Card body -->
               <div class="space-y-2 text-xs border-t border-slate-700 pt-3">
                 ${r.watch_reason ? `
                   <div>
-                    <span class="text-slate-500 font-medium">관심이유</span>
+                    <span class="text-slate-500 font-medium">${t('card.watchReason')}</span>
                     <p class="text-slate-300 mt-0.5 leading-relaxed">${esc(r.watch_reason)}</p>
                   </div>` : ''}
                 ${r.ideal_entry ? `
                   <div class="flex gap-3">
-                    <span class="text-slate-500 font-medium shrink-0">이상진입가</span>
+                    <span class="text-slate-500 font-medium shrink-0">${t('card.idealEntry')}</span>
                     <span class="text-emerald-400 font-semibold">${esc(r.ideal_entry)}</span>
                   </div>` : ''}
                 ${r.trigger_condition ? `
                   <div>
-                    <span class="text-slate-500 font-medium">트리거조건</span>
+                    <span class="text-slate-500 font-medium">${t('card.trigger')}</span>
                     <p class="text-slate-300 mt-0.5 leading-relaxed">${esc(r.trigger_condition)}</p>
                   </div>` : ''}
                 ${r.invalidation ? `
                   <div>
-                    <span class="text-slate-500 font-medium">무효화조건</span>
+                    <span class="text-slate-500 font-medium">${t('card.invalidation')}</span>
                     <p class="text-red-400/80 mt-0.5 leading-relaxed">${esc(r.invalidation)}</p>
                   </div>` : ''}
               </div>
@@ -1004,17 +1077,16 @@ function openWatchlistModal(row = null) {
   _wlEditTicker = row ? row.ticker : null;
   _wlFillLock   = false;
   document.getElementById('wl-ai-status').classList.add('hidden');
-  document.getElementById('modal-watchlist-title').textContent = row ? '종목 수정' : '종목 추가';
+  document.getElementById('modal-watchlist-title').textContent = row ? t('modal.editStock') : t('modal.addStock');
   const form = document.getElementById('form-watchlist');
   form.reset();
   const tickerInput = document.getElementById('wl-ticker');
 
   if (row) {
-    // 자동채움 중 버튼 비활성화 → 채우기 → 재활성화
     setModalBtns('form-watchlist', true);
     Object.entries(row).forEach(([k, v]) => {
       const el = form.elements[k];
-      if (el && !el.value) el.value = v ?? '';   // 빈 필드만 채움
+      if (el && !el.value) el.value = v ?? '';
     });
     tickerInput.readOnly = true;
     setModalBtns('form-watchlist', false);
@@ -1031,10 +1103,10 @@ async function saveWatchlistForm(e) {
   try {
     if (_wlEditTicker) {
       await api('PUT', `/api/watchlist/${_wlEditTicker}`, data);
-      showToast('종목이 수정되었습니다.', 'success');
+      showToast(t('toast.stockUpdated'), 'success');
     } else {
       await api('POST', '/api/watchlist', data);
-      showToast('종목이 추가되었습니다.', 'success');
+      showToast(t('toast.stockAdded'), 'success');
     }
     closeModal('modal-watchlist');
     await loadWatchlist();
@@ -1044,10 +1116,10 @@ async function saveWatchlistForm(e) {
 }
 
 function confirmDeleteWatchlist(ticker) {
-  openConfirm(`"${ticker}" 종목을 관심종목에서 삭제하시겠습니까?`, async () => {
+  openConfirm(t('confirm.deleteWatchlist', { ticker }), async () => {
     try {
       await api('DELETE', `/api/watchlist/${ticker}`);
-      showToast('종목이 삭제되었습니다.', 'success');
+      showToast(t('toast.stockDeleted'), 'success');
       await loadWatchlist();
     } catch (err) {
       showToast(err.message, 'error');
@@ -1059,14 +1131,18 @@ function confirmDeleteWatchlist(ticker) {
 // Init
 // ════════════════════════════════════════════════════════════
 async function init() {
+  const savedLang = getLang();
+  document.getElementById('lang-selector').value = savedLang;
+  applyTranslations();
+
   switchTab('dashboard');
   try {
     await loadDashboard();
   } catch (e) {
     document.getElementById('view-dashboard').innerHTML =
       `<div class="bg-red-900/30 border border-red-700 rounded-xl p-5 text-sm text-red-300">
-        서버 연결 오류: ${e.message}<br>
-        <span class="text-slate-400 text-xs mt-1 block">uvicorn main:app --host 0.0.0.0 --port 8000 으로 서버가 실행 중인지 확인하세요.</span>
+        ${t('err.serverConnect', { msg: e.message })}<br>
+        <span class="text-slate-400 text-xs mt-1 block">${t('err.serverCheck')}</span>
       </div>`;
   }
 }
