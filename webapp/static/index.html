@@ -683,12 +683,18 @@ function switchTab(tab) {
   });
   if (tab === 'portfolio') loadPortfolio();
   if (tab === 'watchlist')  loadWatchlist();
+  if (tab === 'dashboard' && S.status) {
+    if (S.dashView === 'viewer') renderViewerShell();
+    else renderDashboardList();
+  }
 }
 
 // ════════════════════════════════════════════════════════════
 // Dashboard
 // ════════════════════════════════════════════════════════════
 async function loadDashboard() {
+  document.getElementById('view-dashboard').innerHTML =
+    `<div class="flex justify-center py-12"><span class="spinner" style="width:24px;height:24px;border-width:3px;"></span></div>`;
   const [status, daily, weekly] = await Promise.all([
     api('GET', '/api/status'),
     api('GET', '/api/reports/daily'),
