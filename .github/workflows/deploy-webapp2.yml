@@ -93,26 +93,47 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
             set -euo pipefail
-            mkdir -p "/home/hahaysh/webapp2"
-            test -x "/home/hahaysh/myenv/bin/python"
-            command -v rsync >/dev/null 2>&1 || true
+
+            DEPLOY_TARGET_DIR="/home/hahaysh/webapp2"
+            VENV_PYTHON="/home/hahaysh/myenv/bin/python"
+
+            mkdir -p "$DEPLOY_TARGET_DIR"
+            test -x "$VENV_PYTHON"
+
+            # rsync는 필수. 없으면 여기서 실패 처리
+            command -v rsync >/dev/null 2>&1
+
+            # lsof/fuser/ss/curl 있으면 진단/포트정리에 유리 (없어도 배포는 계속 가능)
+            command -v curl >/dev/null 2>&1 || true
+            command -v ss >/dev/null 2>&1 || true
+            command -v lsof >/dev/null 2>&1 || true
+            command -v fuser >/dev/null 2>&1 || true
+
+            # system 서비스 상태 확인(없다면 배포는 하되, 이후 restart에서 실패할 수 있음)
+            sudo systemctl status webapp2 --no-pager -l >/dev/null 2>&1 || true
           '
 
-      - name: Backup current webapp
+      - name: Backup current webapp2
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
             set -euo pipefail
+
+            DEPLOY_TARGET_DIR="/home/hahaysh/webapp2"
             BACKUP_DIR="$HOME/webapp-backups/webapp2-${{ steps.meta.outputs.backup_ts }}"
             mkdir -p "$HOME/webapp-backups"
-            if [ -d "/home/hahaysh/webapp2" ]; then
-              cp -a "/home/hahaysh/webapp2" "$BACKUP_DIR"
+
+            if [ -d "$DEPLOY_TARGET_DIR" ]; then
+              mkdir -p "$BACKUP_DIR"
+              # cp -a 대신 rsync로 구조 꼬임/중첩 방지
+              rsync -a --delete "$DEPLOY_TARGET_DIR"/ "$BACKUP_DIR"/
             fi
+
             echo "Backup dir: $BACKUP_DIR"
           '
 
-      - name: Rsync dry-run
+      - name: Rsync dry-run (webapp -> webapp2)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
         run: |
           set -euo pipefail
@@ -121,9 +142,9 @@ jobs:
             --exclude="*.pyc" \
             -e "ssh -i ~/.ssh/deploy_key" \
             ./webapp/ \
-            "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:$DEPLOY_TARGET_DIR/"
+            "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:${{ env.DEPLOY_TARGET_DIR }}/"
 
-      - name: Rsync webapp to VM
+      - name: Rsync webapp to VM (deploy)
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
         run: |
           set -euo pipefail
@@ -132,27 +153,48 @@ jobs:
             --exclude="*.pyc" \
             -e "ssh -i ~/.ssh/deploy_key" \
             ./webapp/ \
-            "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:$DEPLOY_TARGET_DIR/"
+            "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:${{ env.DEPLOY_TARGET_DIR }}/"
 
-      - name: Install Python dependencies
+      - name: Install Python dependencies (remote venv)
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
             set -euo pipefail
-            cd "/home/hahaysh/webapp2"
-            "/home/hahaysh/myenv/bin/python" -m pip install --upgrade pip -q
-            "/home/hahaysh/myenv/bin/python" -m pip install -r requirements.txt -q
+
+            DEPLOY_TARGET_DIR="/home/hahaysh/webapp2"
+            VENV_PYTHON="/home/hahaysh/myenv/bin/python"
+
+            cd "$DEPLOY_TARGET_DIR"
+
+            "$VENV_PYTHON" -m pip install --upgrade pip
+            # 작은 VM에서 pip 캐시로 인한 메모리/디스크 폭주 완화
+            "$VENV_PYTHON" -m pip install --no-cache-dir -r requirements.txt
           '
 
-      - name: Restart service
+      - name: Restart webapp2 (systemd system service)
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
             set -euo pipefail
-            sudo systemctl restart webapp2
-            sudo systemctl is-active --quiet webapp2
+
+            SERVICE_NAME="webapp2"
+            APP_PORT="8002"
+
+            # restart 전에 포트 점유 프로세스만 정리 (과격 pkill 방지)
+            if command -v lsof >/dev/null 2>&1; then
+              PID="$(sudo lsof -ti tcp:${APP_PORT} || true)"
+              if [ -n "$PID" ]; then
+                echo "Killing PID(s) on port ${APP_PORT}: $PID"
+                sudo kill -9 $PID || true
+              fi
+            elif command -v fuser >/dev/null 2>&1; then
+              sudo fuser -k "${APP_PORT}/tcp" || true
+            fi
+
+            sudo systemctl restart "${SERVICE_NAME}"
+            sudo systemctl is-active --quiet "${SERVICE_NAME}"
           '
 
       - name: Health and API checks
@@ -161,15 +203,23 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
             set -euo pipefail
+
+            SERVICE_NAME="webapp2"
+            APP_PORT="8002"
+
             for attempt in $(seq 1 30); do
-              if curl -fsS "http://127.0.0.1:8002/health" >/dev/null \
-                && curl -fsS "http://127.0.0.1:8002/api/status" >/dev/null; then
+              if curl -fsS "http://127.0.0.1:${APP_PORT}/health" >/dev/null \
+                && curl -fsS "http://127.0.0.1:${APP_PORT}/api/status" >/dev/null; then
                 echo "Health checks passed on attempt $attempt"
                 exit 0
               fi
               sleep 2
             done
-            echo "Health checks failed"
+
+            echo "Health checks failed - dumping diagnostics..."
+            sudo systemctl status "${SERVICE_NAME}" --no-pager -l || true
+            sudo journalctl -u "${SERVICE_NAME}" -n 200 --no-pager || true
+            ss -lntp | grep ":${APP_PORT}" || true
             exit 1
           '
 
@@ -179,25 +229,46 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
             set -euo pipefail
+
+            DEPLOY_TARGET_DIR="/home/hahaysh/webapp2"
+            VENV_PYTHON="/home/hahaysh/myenv/bin/python"
+            SERVICE_NAME="webapp2"
+            APP_PORT="8002"
             BACKUP_DIR="$HOME/webapp-backups/webapp2-${{ steps.meta.outputs.backup_ts }}"
+
             if [ ! -d "$BACKUP_DIR" ]; then
               echo "Rollback backup not found: $BACKUP_DIR"
               exit 1
             fi
-            rm -rf "/home/hahaysh/webapp2"
-            cp -a "$BACKUP_DIR" "/home/hahaysh/webapp2"
-            cd "/home/hahaysh/webapp2"
-            "/home/hahaysh/myenv/bin/python" -m pip install -r requirements.txt -q
-            sudo systemctl restart webapp2
-            sudo systemctl is-active --quiet webapp2
+
+            mkdir -p "$DEPLOY_TARGET_DIR"
+            # rm -rf / cp -a 대신 rsync로 안전 복구
+            rsync -a --delete "$BACKUP_DIR"/ "$DEPLOY_TARGET_DIR"/
+
+            cd "$DEPLOY_TARGET_DIR"
+            "$VENV_PYTHON" -m pip install --no-cache-dir -r requirements.txt
+
+            # 포트 점유만 정리
+            if command -v lsof >/dev/null 2>&1; then
+              PID="$(sudo lsof -ti tcp:${APP_PORT} || true)"
+              if [ -n "$PID" ]; then
+                echo "Killing PID(s) on port ${APP_PORT}: $PID"
+                sudo kill -9 $PID || true
+              fi
+            elif command -v fuser >/dev/null 2>&1; then
+              sudo fuser -k "${APP_PORT}/tcp" || true
+            fi
+
+            sudo systemctl restart "${SERVICE_NAME}"
+            sudo systemctl is-active --quiet "${SERVICE_NAME}"
           '
 
-      - name: Service logs
+      - name: Service logs (webapp2)
         if: ${{ always() }}
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
-            sudo journalctl -u webapp2 -n 80 --no-pager || true
+            sudo journalctl -u webapp2 -n 120 --no-pager || true
           '
 
       - name: Cleanup old backups
@@ -206,8 +277,9 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" '
             set -euo pipefail
+            BACKUP_RETENTION_DAYS="7"
             if [ -d "$HOME/webapp-backups" ]; then
               find "$HOME/webapp-backups" -mindepth 1 -maxdepth 1 -name "webapp2-*" -type d \
-                -mtime +"7" -exec rm -rf {} +
+                -mtime +"$BACKUP_RETENTION_DAYS" -exec rm -rf {} +
             fi
           '
