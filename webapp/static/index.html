@@ -684,8 +684,12 @@ function switchTab(tab) {
   if (tab === 'portfolio') loadPortfolio();
   if (tab === 'watchlist')  loadWatchlist();
   if (tab === 'dashboard' && S.status) {
-    if (S.dashView === 'viewer') renderViewerShell();
-    else renderDashboardList();
+    if (S.dashView === 'viewer') {
+      renderViewerShell();
+      fetchViewerContent();
+    } else {
+      renderDashboardList();
+    }
   }
 }
 
