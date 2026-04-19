@@ -115,16 +115,16 @@ NAVER(035420), 카카오(035720), MSFT, GOOGL, 기아(000270), CVX
 # 개발
 bash ~/investment-assistant/webapp/start.sh
 
-# 운영 (systemd)
-sudo systemctl start investment-webapp
-sudo systemctl status investment-webapp
-journalctl -u investment-webapp -f
+# 운영 (systemd) — 서비스명: webapp2
+sudo systemctl start webapp2
+sudo systemctl status webapp2
+journalctl -u webapp2 -f
 ```
 
 **서비스 파일**: [webapp/investment-webapp.service](webapp/investment-webapp.service)
 - User: `hahaysh`
-- WorkingDirectory: `/home/hahaysh/investment-assistant/webapp`
-- 포트: 8000 (uvicorn), nginx가 80 → 8000 프록시
+- WorkingDirectory: `/home/hahaysh/webapp2`
+- 포트: 8002 (uvicorn), nginx가 80 → 8002 프록시
 
 ### Nginx
 
@@ -205,7 +205,9 @@ investment-assistant/          ← 로컬 Windows 개발 환경
 │   │   ├── portfolio.py
 │   │   ├── watchlist.py
 │   │   └── enrich.py
-│   └── static/index.html
+│   └── static/
+│       ├── index.html
+│       └── translations/      ← 다국어 번역 (ko/en/ja/zh/fr)
 └── openclaw/                  ← OpenClaw 설정/문서
     ├── docs/                  ← 단계별 세팅 가이드
     └── scripts/setup.sh

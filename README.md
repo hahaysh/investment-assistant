@@ -86,7 +86,13 @@ investment-assistant/
     │   ├── watchlist.py             # 관심종목 CRUD API
     │   └── enrich.py                # 종목 정보 조회 + AI 자동채움 API
     └── static/
-        └── index.html               # SPA 프론트엔드 (전체 UI)
+        ├── index.html               # SPA 프론트엔드 (전체 UI)
+        └── translations/            # 다국어 번역 파일
+            ├── ko.js                # 한국어
+            ├── en.js                # English
+            ├── ja.js                # 日本語
+            ├── zh.js                # 中文
+            └── fr.js                # Français
 ```
 
 ---
@@ -204,6 +210,7 @@ trigger_condition, invalidation, risk_notes, priority
 | **버튼 잠금** | `setModalBtns(formId, disabled)` — API 호출 중 이중 제출 방지 |
 | **마크다운 렌더링** | `renderMarkdown()` + `colorizeTree()` — ▲▼ 기호를 색상(초록/빨강)으로 강조 |
 | **lookup map** | `_pfMap`, `_wlMap` — `onclick` 속성에서 JSON 직렬화 없이 행 데이터를 참조 |
+| **다국어 지원** | `t(key)` 헬퍼 + `data-i18n` 속성 기반 번역. 한국어·영어·일본어·중국어·프랑스어 지원. 선택 언어는 `localStorage`에 저장 |
 
 ### 자동채움 정책
 
@@ -215,8 +222,8 @@ trigger_condition, invalidation, risk_notes, priority
 
 #### 관심종목 추가
 
-- ticker 또는 종목명 입력 후 포커스 이동 시 `GET /api/enrich/watchlist/{query}` 호출
-- yfinance 뉴스 5건 + Azure OpenAI(gpt-4o) → 한국어 분석 텍스트 생성
+- ticker 또는 종목명 입력 후 포커스 이동 시 `GET /api/enrich/watchlist/{query}?lang={lang}` 호출
+- yfinance 뉴스 5건 + Azure OpenAI(gpt-4o) → 선택 언어로 분석 텍스트 생성 (한국어·영어·일본어·중국어·프랑스어)
 - 생성 필드: 관심 이유, 이상적 진입가, 트리거 조건, 무효화 조건, 리스크 노트, 우선순위
 - Azure OpenAI는 VM의 `~/.openclaw/openclaw.json` 설정을 그대로 읽어 사용 (별도 환경변수 불필요)
 
@@ -242,7 +249,7 @@ trigger_condition, invalidation, risk_notes, priority
 | PUT | `/api/watchlist/{ticker}` | 관심종목 수정 |
 | DELETE | `/api/watchlist/{ticker}` | 관심종목 삭제 |
 | GET | `/api/enrich/{ticker}` | ticker 종목 정보 조회 (yfinance) |
-| GET | `/api/enrich/watchlist/{query}` | ticker·종목명 → AI 관심종목 필드 생성 |
+| GET | `/api/enrich/watchlist/{query}?lang=ko` | ticker·종목명 → AI 관심종목 필드 생성 (lang: ko/en/ja/zh/fr) |
 
 Swagger UI: `http://<VM_IP>:8002/docs`
 
