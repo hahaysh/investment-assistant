@@ -1,134 +1,134 @@
-# 투자 비서 프로젝트 (Investment Assistant)
+# Investment Assistant Project
 
-## 프로젝트 개요
+## Project Overview
 
-Azure Linux VM에서 실행되는 개인 투자 비서 시스템.
-- **매일 KST 09:00**: yfinance로 시장 데이터 수집 → 일일 브리핑 마크다운 생성 → Telegram 요약 전송
-- **매주 월요일 KST 09:10**: 주간 포트폴리오 리포트 생성 → Telegram 전송
-- **웹앱(FastAPI)**: 브리핑 열람, 포트폴리오/watchlist CRUD, AI 종목 자동채움
+A personal investment assistant system running on an Azure Linux VM.
+- **Daily at 09:00 KST**: Collect market data via yfinance → generate daily briefing Markdown → send Telegram summary
+- **Every Monday at 09:10 KST**: Generate weekly portfolio report → send via Telegram
+- **Web App (FastAPI)**: View briefings, manage portfolio/watchlist CRUD, AI stock auto-fill
 
 ---
 
-## 인프라
+## Infrastructure
 
 ### Azure Linux VM
-- **사용자**: `hahaysh`
-- **홈 디렉토리**: `/home/hahaysh`
+- **User**: `hahaysh`
+- **Home directory**: `/home/hahaysh`
 - **Timezone**: UTC (KST = UTC+9, KST 09:00 → cron `0 0 * * *`)
-- SSH로 접속하여 직접 작업
+- Access via SSH for direct operations
 
 ### OpenClaw
-- **설치 경로**: `/home/hahaysh/.npm-global/bin/openclaw`
-- **설정 파일**: `~/.openclaw/openclaw.json`
-- **모델**: Microsoft Azure Foundry (gpt-4o / gpt-5-mini)
-  - 웹 검색 기능 없음 → 시장 데이터는 yfinance로 직접 수집
-- **Telegram 연동**: OpenClaw를 통해 Telegram으로 브리핑 전송
-- **Telegram chat ID**: `7733177955` (세션 파일: `~/.openclaw/agents/main/sessions/sessions.json`)
-- **스킬 위치**: `~/.openclaw/skills/`
+- **Install path**: `/home/hahaysh/.npm-global/bin/openclaw`
+- **Config file**: `~/.openclaw/openclaw.json`
+- **Model**: Microsoft Azure Foundry (gpt-4o / gpt-5-mini)
+  - No web search capability → market data collected directly via yfinance
+- **Telegram integration**: Briefings sent to Telegram via OpenClaw
+- **Telegram chat ID**: `7733177955` (session file: `~/.openclaw/agents/main/sessions/sessions.json`)
+- **Skills directory**: `~/.openclaw/skills/`
 
-### OpenClaw 스킬 2개
-1. `daily-investment-briefing`: 일일 브리핑 생성 스킬
-2. `weekly-portfolio-report`: 주간 리포트 생성 스킬
-- 스킬 정의 파일: [openclaw/docs/step2-skills.md](openclaw/docs/step2-skills.md)
+### OpenClaw Skills (2 skills)
+1. `daily-investment-briefing`: Daily briefing generation skill
+2. `weekly-portfolio-report`: Weekly report generation skill
+- Skill definition file: [openclaw/docs/step2-skills.md](openclaw/docs/step2-skills.md)
 
 ---
 
-## 디렉토리 구조 (VM 기준)
+## Directory Structure (VM)
 
 ```
 ~/investment-assistant/
 ├── data/
-│   ├── investor_profile.md    # 투자자 프로필 (유승호)
-│   ├── portfolio.csv          # 보유 종목
-│   └── watchlist.csv          # 관심 종목
+│   ├── investor_profile.md    # Investor profile
+│   ├── portfolio.csv          # Holdings
+│   └── watchlist.csv          # Watchlist
 ├── reports/
-│   ├── daily/YYYY-MM-DD.md   # 일일 브리핑
-│   └── weekly/YYYY-Wxx.md    # 주간 리포트
+│   ├── daily/YYYY-MM-DD.md   # Daily briefings
+│   └── weekly/YYYY-Wxx.md    # Weekly reports
 ├── logs/
 │   ├── daily.log
 │   └── weekly.log
-├── generate_briefing.py       # 일일 브리핑 스크립트
-└── webapp/                    # FastAPI 웹앱 (아래 참조)
+├── generate_briefing.py       # Daily briefing script
+└── webapp/                    # FastAPI web app (see below)
 ```
 
 ---
 
-## 투자자 프로필 (유승호)
+## Investor Profile
 
-- **투자 경력**: 3년, 자산 통화: KRW + USD
-- **스타일**: Value, Quality, Cash Flow 중심, Shareholder Return, 중장기 보유
-- **선호 섹터**: 한국(반도체, 금융, 자동차), 미국(금융, 헬스케어, 에너지, 고품질 플랫폼)
+- **Experience**: 3 years, assets in KRW + USD
+- **Style**: Value, Quality, Cash Flow focused, Shareholder Return, medium-to-long-term holding
+- **Preferred sectors**: Korea (semiconductors, financials, autos), US (financials, healthcare, energy, quality platforms)
 
-### 포트폴리오 (주요 종목)
-| 티커 | 종목 | 시장 |
-|------|------|------|
-| 005930 | 삼성전자 | KRX |
-| 000660 | SK하이닉스 | KRX |
-| 005380 | 현대차 | KRX |
-| 105560 | KB금융 | KRX |
+### Portfolio (Key Holdings)
+| Ticker | Company | Market |
+|--------|---------|--------|
+| 005930 | Samsung Electronics | KRX |
+| 000660 | SK Hynix | KRX |
+| 005380 | Hyundai Motor | KRX |
+| 105560 | KB Financial | KRX |
 | JPM | JPMorgan Chase | NYSE |
 | UNH | UnitedHealth Group | NYSE |
 | XOM | ExxonMobil | NYSE |
 | BRK.B | Berkshire Hathaway B | NYSE |
 
-### Watchlist (주요 종목)
-NAVER(035420), 카카오(035720), MSFT, GOOGL, 기아(000270), CVX
+### Watchlist (Key Stocks)
+NAVER(035420), Kakao(035720), MSFT, GOOGL, Kia(000270), CVX
 
 ---
 
 ## generate_briefing.py
 
-**위치**: `~/investment-assistant/generate_briefing.py`
+**Location**: `~/investment-assistant/generate_briefing.py`
 
-**동작 순서**:
-1. yfinance로 매크로 데이터 수집 (KOSPI, KOSDAQ, S&P500, NASDAQ, USDKRW, 미국10년물, DXY, WTI, 금, VIX)
-2. portfolio.csv 읽어 보유 종목 주가 수집
-3. 마크다운 브리핑 `reports/daily/YYYY-MM-DD.md` 저장
-4. `openclaw message send --channel telegram --target 7733177955` 로 요약 전송
-5. `openclaw agent` 로 시나리오/액션 섹션 자동 채우기
+**Execution order**:
+1. Collect macro data via yfinance (KOSPI, KOSDAQ, S&P500, NASDAQ, USDKRW, US 10Y yield, DXY, WTI, Gold, VIX)
+2. Read portfolio.csv and collect stock prices for holdings
+3. Save Markdown briefing to `reports/daily/YYYY-MM-DD.md`
+4. Send summary via `openclaw message send --channel telegram --target 7733177955`
+5. Auto-fill scenario/action sections via `openclaw agent`
 
-**KRX ticker 매핑**: yfinance는 `.KS` 접미사 필요 (`005930` → `005930.KS`), `BRK.B` → `BRK-B`
+**KRX ticker mapping**: yfinance requires `.KS` suffix (`005930` → `005930.KS`), `BRK.B` → `BRK-B`
 
 ---
 
-## cron 스케줄
+## Cron Schedule
 
 ```cron
-# 일일 브리핑 - 매일 09:00 KST (UTC 00:00)
+# Daily briefing - every day at 09:00 KST (UTC 00:00)
 0 0 * * * python3 /home/hahaysh/investment-assistant/generate_briefing.py >> /home/hahaysh/investment-assistant/logs/daily.log 2>&1
 
-# 주간 리포트 - 매주 월요일 09:10 KST (UTC 00:10)
-10 0 * * 1 /home/hahaysh/.npm-global/bin/openclaw agent --to telegram:7733177955 --deliver --message "주간 포트폴리오 리포트 ..."
+# Weekly report - every Monday at 09:10 KST (UTC 00:10)
+10 0 * * 1 /home/hahaysh/.npm-global/bin/openclaw agent --to telegram:7733177955 --deliver --message "Generate weekly portfolio report ..."
 ```
 
-**주의**: cron에서 openclaw 전체 경로 필수 (`which openclaw` → `/home/hahaysh/.npm-global/bin/openclaw`)
+**Note**: Full path required for openclaw in cron (`which openclaw` → `/home/hahaysh/.npm-global/bin/openclaw`)
 
 ---
 
-## 웹앱 (FastAPI)
+## Web App (FastAPI)
 
-**위치**: `~/investment-assistant/webapp/` (이 저장소의 [webapp/](webapp/) 폴더)
+**Location**: `~/investment-assistant/webapp/` (this repo's [webapp/](webapp/) folder)
 
-### 실행
+### Running
 
 ```bash
-# 개발
+# Development
 bash ~/investment-assistant/webapp/start.sh
 
-# 운영 (systemd) — 서비스명: webapp2
+# Production (systemd) — service name: webapp2
 sudo systemctl start webapp2
 sudo systemctl status webapp2
 journalctl -u webapp2 -f
 ```
 
-**서비스 파일**: [webapp/investment-webapp.service](webapp/investment-webapp.service)
+**Service file**: [webapp/investment-webapp.service](webapp/investment-webapp.service)
 - User: `hahaysh`
 - WorkingDirectory: `/home/hahaysh/webapp2`
-- 포트: 8002 (uvicorn), nginx가 80 → 8002 프록시
+- Port: 8002 (uvicorn), nginx proxies 80 → 8002
 
 ### Nginx
 
-**설정 파일**: [webapp/nginx-investment.conf](webapp/nginx-investment.conf)
+**Config file**: [webapp/nginx-investment.conf](webapp/nginx-investment.conf)
 
 ```bash
 sudo cp nginx-investment.conf /etc/nginx/sites-available/investment
@@ -136,25 +136,25 @@ sudo ln -s /etc/nginx/sites-available/investment /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### API 라우터
+### API Routers
 
-| 경로 | 파일 | 기능 |
-|------|------|------|
-| `/api/reports/daily` | [webapp/routers/reports.py](webapp/routers/reports.py) | 일일 브리핑 목록/조회 |
-| `/api/reports/weekly` | webapp/routers/reports.py | 주간 리포트 목록/조회 |
-| `/api/portfolio` | [webapp/routers/portfolio.py](webapp/routers/portfolio.py) | 포트폴리오 CRUD |
-| `/api/watchlist` | [webapp/routers/watchlist.py](webapp/routers/watchlist.py) | 관심종목 CRUD |
-| `/api/enrich/{ticker}` | [webapp/routers/enrich.py](webapp/routers/enrich.py) | yfinance 종목 정보 조회 |
-| `/api/enrich/watchlist/{query}` | webapp/routers/enrich.py | AI 관심종목 자동채움 |
-| `/api/run-briefing` | [webapp/main.py](webapp/main.py) | 브리핑 수동 실행 |
-| `/api/status` | webapp/main.py | 최신 리포트 날짜 조회 |
+| Path | File | Function |
+|------|------|----------|
+| `/api/reports/daily` | [webapp/routers/reports.py](webapp/routers/reports.py) | Daily briefing list/content |
+| `/api/reports/weekly` | webapp/routers/reports.py | Weekly report list/content |
+| `/api/portfolio` | [webapp/routers/portfolio.py](webapp/routers/portfolio.py) | Portfolio CRUD |
+| `/api/watchlist` | [webapp/routers/watchlist.py](webapp/routers/watchlist.py) | Watchlist CRUD |
+| `/api/enrich/{ticker}` | [webapp/routers/enrich.py](webapp/routers/enrich.py) | yfinance stock info lookup |
+| `/api/enrich/watchlist/{query}` | webapp/routers/enrich.py | AI watchlist auto-fill |
+| `/api/run-briefing` | [webapp/main.py](webapp/main.py) | Trigger briefing manually |
+| `/api/status` | webapp/main.py | Latest report date lookup |
 
-### enrich 라우터 특이사항
-- `~/.openclaw/openclaw.json`에서 Azure OpenAI 접속 정보를 읽어 LLM 호출
-- 별도 환경변수 불필요, OpenClaw 설정 파일 그대로 사용
-- KRX 종목 자동 판별 (5~6자리 숫자) → `.KS`/`.KQ` 후보 순서대로 시도
+### enrich Router Notes
+- Reads Azure OpenAI credentials from `~/.openclaw/openclaw.json` for LLM calls
+- No separate environment variables needed — uses OpenClaw config file directly
+- Auto-detects KRX stocks (5–6 digit numbers) → tries `.KS`/`.KQ` suffixes in order
 
-### 데이터 경로 (config.py)
+### Data Paths (config.py)
 ```python
 DATA_DIR = Path("~/investment-assistant/data").expanduser()
 DAILY_REPORTS_DIR = Path("~/investment-assistant/reports/daily").expanduser()
@@ -164,36 +164,36 @@ BRIEFING_SCRIPT = Path("~/investment-assistant/generate_briefing.py").expanduser
 
 ---
 
-## 알려진 문제 / 트러블슈팅
+## Known Issues / Troubleshooting
 
-| 문제 | 해결 |
-|------|------|
-| `openclaw message "..."` 오류 | `openclaw agent --to telegram:ID --message "..." --deliver` 또는 `openclaw message send --channel telegram --target ID --message "..."` 사용 |
-| cron에서 openclaw not found | 전체 경로 사용: `/home/hahaysh/.npm-global/bin/openclaw` |
-| yfinance 웹 검색 403 오류 | Microsoft Foundry 모델은 웹 검색 불가 → yfinance Python 스크립트로 직접 수집 |
-| KRX 종목 주가 조회 실패 | `005930` → `005930.KS`, `BRK.B` → `BRK-B` |
-| 브리핑 시나리오 섹션 비어있음 | `openclaw agent`가 파일에 실제로 저장 안 하는 경우 있음 → generate_briefing.py가 직접 저장 처리 |
-
----
-
-## 설치 가이드 (새 VM 세팅 시)
-
-순서대로 진행:
-1. [step1-project-setup.md](openclaw/docs/step1-project-setup.md) — 폴더/데이터 파일 생성
-2. [step2-skills.md](openclaw/docs/step2-skills.md) — OpenClaw 스킬 등록
-3. [step3-briefing-script.md](openclaw/docs/step3-briefing-script.md) — generate_briefing.py 생성
-4. [step4-cron.md](openclaw/docs/step4-cron.md) — cron 스케줄 등록
-5. [step5-test.md](openclaw/docs/step5-test.md) — 전체 검증
-- [troubleshooting.md](openclaw/docs/troubleshooting.md) — 트러블슈팅
+| Issue | Solution |
+|-------|----------|
+| `openclaw message "..."` error | Use `openclaw agent --to telegram:ID --message "..." --deliver` or `openclaw message send --channel telegram --target ID --message "..."` |
+| openclaw not found in cron | Use full path: `/home/hahaysh/.npm-global/bin/openclaw` |
+| yfinance web search 403 error | Microsoft Foundry models have no web search → collect data directly via yfinance Python script |
+| KRX stock price lookup failure | `005930` → `005930.KS`, `BRK.B` → `BRK-B` |
+| Briefing scenario section empty | `openclaw agent` sometimes doesn't save to file → generate_briefing.py handles saving directly |
 
 ---
 
-## 이 저장소 구조
+## Setup Guide (New VM)
+
+Follow in order:
+1. [step1-project-setup.md](openclaw/docs/step1-project-setup.md) — Create folders and data files
+2. [step2-skills.md](openclaw/docs/step2-skills.md) — Register OpenClaw skills
+3. [step3-briefing-script.md](openclaw/docs/step3-briefing-script.md) — Create generate_briefing.py
+4. [step4-cron.md](openclaw/docs/step4-cron.md) — Set up cron schedule
+5. [step5-test.md](openclaw/docs/step5-test.md) — Full verification
+- [troubleshooting.md](openclaw/docs/troubleshooting.md) — Troubleshooting
+
+---
+
+## Repository Structure
 
 ```
-investment-assistant/          ← 로컬 Windows 개발 환경
-├── CLAUDE.md                  ← 이 파일
-├── webapp/                    ← FastAPI 웹앱 소스 (VM에 배포)
+investment-assistant/          ← Local Windows development environment
+├── CLAUDE.md                  ← This file
+├── webapp/                    ← FastAPI web app source (deployed to VM)
 │   ├── main.py
 │   ├── config.py
 │   ├── requirements.txt
@@ -207,8 +207,8 @@ investment-assistant/          ← 로컬 Windows 개발 환경
 │   │   └── enrich.py
 │   └── static/
 │       ├── index.html
-│       └── translations/      ← 다국어 번역 (ko/en/ja/zh/fr)
-└── openclaw/                  ← OpenClaw 설정/문서
-    ├── docs/                  ← 단계별 세팅 가이드
+│       └── translations/      ← i18n translation files (ko/en/ja/zh/fr)
+└── openclaw/                  ← OpenClaw configuration and docs
+    ├── docs/                  ← Step-by-step setup guides
     └── scripts/setup.sh
 ```
