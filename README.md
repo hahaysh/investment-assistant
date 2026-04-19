@@ -2,6 +2,8 @@
 
 Azure Linux VM에서 OpenClaw AI Agent가 매일 투자 브리핑을 자동 생성하고, FastAPI 웹앱으로 포트폴리오·관심종목을 관리하는 개인 투자 관리 시스템입니다.
 
+> **🌐 서비스 접속:** [http://hahayshopenclaw.koreacentral.cloudapp.azure.com:8002/](http://hahayshopenclaw.koreacentral.cloudapp.azure.com:8002/)
+
 ---
 
 ## 시스템 아키텍처
