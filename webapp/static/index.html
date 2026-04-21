@@ -756,14 +756,18 @@ function switchTab(tab) {
 async function loadDashboard() {
   document.getElementById('view-dashboard').innerHTML =
     `<div class="flex justify-center py-12"><span class="spinner" style="width:24px;height:24px;border-width:3px;"></span></div>`;
-  const [status, daily, weekly] = await Promise.all([
+  const [status, daily, weekly, portfolio, watchlist] = await Promise.all([
     api('GET', '/api/status'),
     api('GET', '/api/reports/daily'),
     api('GET', '/api/reports/weekly'),
+    api('GET', '/api/portfolio'),
+    api('GET', '/api/watchlist'),
   ]);
   S.status = status;
   S.dailyReports  = daily;
   S.weeklyReports = weekly;
+  S.portfolioData = portfolio;
+  S.watchlistData = watchlist;
   renderDashboardList();
 }
 
@@ -961,7 +965,10 @@ function renderPortfolio() {
             <tbody>
               ${data.map((r, i) => `
                 <tr class="${i % 2 === 0 ? 'bg-[#1e293b]' : 'bg-[#162032]'} border-t border-slate-700 hover:bg-slate-700/50 transition-colors">
-                  <td class="px-4 py-3 font-mono font-semibold text-amber-300">${esc(r.ticker)}</td>
+                  <td class="px-4 py-3 font-mono font-semibold">
+                    <a href="${makeTickerUrl(r.ticker, r.market)}" target="_blank" rel="noopener noreferrer"
+                      class="text-amber-300 ticker-link">${esc(r.ticker)}</a>
+                  </td>
                   <td class="px-4 py-3 text-slate-200">${esc(r.company_name)}</td>
                   <td class="px-4 py-3 text-slate-400 hidden sm:table-cell">${esc(r.market)}</td>
                   <td class="px-4 py-3 text-right hidden sm:table-cell">${esc(r.quantity)}</td>
@@ -1108,7 +1115,8 @@ function renderWatchlist() {
               <div class="flex justify-between items-start mb-3">
                 <div>
                   <div class="flex items-center gap-2">
-                    <span class="font-mono font-bold text-amber-300 text-base">${esc(r.ticker)}</span>
+                    <a href="${makeTickerUrl(r.ticker, r.market)}" target="_blank" rel="noopener noreferrer"
+                      class="font-mono font-bold text-amber-300 text-base ticker-link">${esc(r.ticker)}</a>
                     ${r.market ? `<span class="text-xs text-slate-400 bg-slate-700 px-1.5 py-0.5 rounded">${esc(r.market)}</span>` : ''}
                     ${r.priority ? `<span class="text-xs text-amber-500 font-semibold">P${esc(r.priority)}</span>` : ''}
                   </div>
