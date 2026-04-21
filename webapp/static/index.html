@@ -29,6 +29,8 @@
     .md-content td { border: 1px solid #334155; padding: 0.5rem 0.75rem; }
     .md-content tr:nth-child(even) td { background: #162032; }
     .md-content a { color: #60a5fa; text-decoration: underline; }
+    .ticker-link { color: #f59e0b; font-weight: 600; text-decoration: underline; }
+    .ticker-link:hover { color: #fcd34d; text-decoration-thickness: 2px; }
     .up-text   { color: #22c55e !important; font-weight: 600; }
     .down-text { color: #ef4444 !important; font-weight: 600; }
 
@@ -384,7 +386,7 @@ function setLang(lang) {
   applyTranslations();
   // Re-render currently visible tab to update dynamic text
   if (S.tab === 'dashboard') {
-    if (S.dashView === 'viewer') renderViewerShell();
+    if (S.dashView === 'viewer') { renderViewerShell(); populateReportSelect(S.viewerSelected, false); }
     else renderDashboardList();
   } else if (S.tab === 'portfolio') {
     renderPortfolio();
@@ -406,6 +408,7 @@ const S = {
   portfolioData: [],
   watchlistData: [],
   status: null,
+  reportLoadRequestId: 0,
 };
 
 // Row lookup maps for modal (avoids serialization issues in onclick)
@@ -676,6 +679,52 @@ function colorizeTree(node) {
 }
 
 // ════════════════════════════════════════════════════════════
+// Ticker link injection
+// ════════════════════════════════════════════════════════════
+function buildTickerMap() {
+  const map = {};
+  [...S.portfolioData, ...S.watchlistData].forEach(r => {
+    if (r.ticker) map[r.ticker.toUpperCase()] = r.market || '';
+  });
+  return map;
+}
+function makeTickerUrl(ticker, market) {
+  if (/^\d{5,6}$/.test(ticker) || market === 'KRX')
+    return `https://finance.naver.com/item/main.naver?code=${ticker}`;
+  return `https://finance.yahoo.com/quote/${ticker.replace(/\./g, '-')}`;
+}
+function injectTickerLinks(html) {
+  const map = buildTickerMap();
+  const tickers = Object.keys(map);
+  if (!tickers.length) return html;
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  const SKIP = new Set(['A', 'CODE', 'PRE', 'SCRIPT', 'STYLE']);
+  function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent;
+      if (!tickers.some(tk => new RegExp(`(?<![A-Za-z0-9.])${escRe(tk)}(?![A-Za-z0-9.])`).test(text))) return;
+      const span = document.createElement('span');
+      let out = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      for (const tk of tickers) {
+        const url = makeTickerUrl(tk, map[tk]);
+        out = out.replace(
+          new RegExp(`(?<![A-Za-z0-9.])${escRe(tk)}(?![A-Za-z0-9.])`, 'g'),
+          `<a href="${url}" target="_blank" rel="noopener noreferrer" class="ticker-link">${tk}</a>`
+        );
+      }
+      span.innerHTML = out;
+      node.parentNode.replaceChild(span, node);
+    } else if (node.nodeType === Node.ELEMENT_NODE && !SKIP.has(node.tagName)) {
+      Array.from(node.childNodes).forEach(processNode);
+    }
+  }
+  processNode(div);
+  return div.innerHTML;
+}
+
+// ════════════════════════════════════════════════════════════
 // Tab switching
 // ════════════════════════════════════════════════════════════
 function switchTab(tab) {
@@ -694,7 +743,7 @@ function switchTab(tab) {
   if (tab === 'dashboard' && S.status) {
     if (S.dashView === 'viewer') {
       renderViewerShell();
-      fetchViewerContent();
+      populateReportSelect(S.viewerSelected);
     } else {
       renderDashboardList();
     }
@@ -747,31 +796,27 @@ function renderDashboardList() {
         <h2 class="text-slate-300 font-semibold text-sm mb-3 flex items-center gap-2">
           <span class="text-amber-400">◆</span> ${t('dashboard.dailyList')}
         </h2>
-        <div class="space-y-2">
-          ${S.dailyReports.length
-            ? S.dailyReports.map(r => `
-              <button onclick="openViewer('daily','${r.date}')"
-                class="w-full text-left bg-[#1e293b] hover:bg-slate-700 border border-slate-700 rounded-lg px-4 py-3 text-sm transition-colors flex justify-between items-center group">
-                <span class="text-slate-200">${r.date}</span>
-                <span class="text-slate-500 group-hover:text-amber-400 text-xs transition-colors">${t('report.view')}</span>
-              </button>`).join('')
-            : `<p class="text-slate-500 text-sm py-2">${t('report.empty')}</p>`}
-        </div>
+        ${S.dailyReports.length
+          ? `<select onchange="if(this.value) openViewer('daily', this.value)"
+               title="${t('dashboard.dailyList')}" aria-label="${t('dashboard.dailyList')}"
+               class="form-input mt-1 w-full">
+              <option value="" disabled selected>${t('report.selectPlaceholder')}</option>
+              ${S.dailyReports.map(r => `<option value="${r.date}">${r.date}</option>`).join('')}
+             </select>`
+          : `<p class="text-slate-500 text-sm py-2">${t('report.empty')}</p>`}
       </div>
       <div>
         <h2 class="text-slate-300 font-semibold text-sm mb-3 flex items-center gap-2">
           <span class="text-amber-400">◆</span> ${t('dashboard.weeklyList')}
         </h2>
-        <div class="space-y-2">
-          ${S.weeklyReports.length
-            ? S.weeklyReports.map(r => `
-              <button onclick="openViewer('weekly','${r.week}')"
-                class="w-full text-left bg-[#1e293b] hover:bg-slate-700 border border-slate-700 rounded-lg px-4 py-3 text-sm transition-colors flex justify-between items-center group">
-                <span class="text-slate-200">${r.week}</span>
-                <span class="text-slate-500 group-hover:text-amber-400 text-xs transition-colors">${t('report.view')}</span>
-              </button>`).join('')
-            : `<p class="text-slate-500 text-sm py-2">${t('report.empty')}</p>`}
-        </div>
+        ${S.weeklyReports.length
+          ? `<select onchange="if(this.value) openViewer('weekly', this.value)"
+               title="${t('dashboard.weeklyList')}" aria-label="${t('dashboard.weeklyList')}"
+               class="form-input mt-1 w-full">
+              <option value="" disabled selected>${t('report.selectPlaceholder')}</option>
+              ${S.weeklyReports.map(r => `<option value="${r.week}">${r.week}</option>`).join('')}
+             </select>`
+          : `<p class="text-slate-500 text-sm py-2">${t('report.empty')}</p>`}
       </div>
     </div>`;
 }
@@ -797,29 +842,24 @@ async function runBriefing(btn) {
 function openViewer(type, id) {
   S.dashView = 'viewer';
   S.viewerType = type;
-  S.viewerSelected = id;
   renderViewerShell();
-  fetchViewerContent();
+  populateReportSelect(id);
 }
 function renderViewerShell() {
   const isDaily = S.viewerType === 'daily';
-  const list    = isDaily ? S.dailyReports : S.weeklyReports;
-  const options = list.map(r => {
-    const val = isDaily ? r.date : r.week;
-    return `<option value="${val}" ${val === S.viewerSelected ? 'selected' : ''}>${val}</option>`;
-  }).join('');
+  const listLabel = t(isDaily ? 'dashboard.dailyList' : 'dashboard.weeklyList');
   document.getElementById('view-dashboard').innerHTML = `
     <div class="flex flex-wrap items-center gap-3 mb-5">
       <button onclick="renderDashboardList()" class="text-slate-400 hover:text-white text-sm transition-colors">${t('btn.backToList')}</button>
       <div class="flex bg-[#1e293b] border border-slate-700 rounded-lg p-0.5 gap-0.5">
-        <button onclick="switchViewerType('daily')"
+        <button onclick="setViewerTab('daily', '')"
           class="px-3 py-1 rounded text-sm font-medium transition-colors ${isDaily ? 'bg-amber-500 text-slate-900' : 'text-slate-300 hover:bg-slate-700'}">${t('viewer.daily')}</button>
-        <button onclick="switchViewerType('weekly')"
+        <button onclick="setViewerTab('weekly', '')"
           class="px-3 py-1 rounded text-sm font-medium transition-colors ${!isDaily ? 'bg-amber-500 text-slate-900' : 'text-slate-300 hover:bg-slate-700'}">${t('viewer.weekly')}</button>
       </div>
-      <select id="viewer-select" onchange="selectViewerItem(this.value)"
+      <select id="viewer-select" onchange="setViewerTab(S.viewerType, this.value)"
+        title="${listLabel}" aria-label="${listLabel}"
         class="bg-[#1e293b] border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-400">
-        ${options || '<option>—</option>'}
       </select>
     </div>
     <div id="viewer-body"
@@ -829,29 +869,48 @@ function renderViewerShell() {
       </div>
     </div>`;
 }
-async function fetchViewerContent() {
+function populateReportSelect(selectedKey = '', loadContent = true) {
+  const isDaily = S.viewerType === 'daily';
+  const list = isDaily ? S.dailyReports : S.weeklyReports;
+  const sel = document.getElementById('viewer-select');
+  if (!sel) return;
+  const placeholder = `<option value="" disabled>${t('report.selectPlaceholder')}</option>`;
+  const opts = list.map(r => {
+    const val = isDaily ? r.date : r.week;
+    return `<option value="${val}">${val}</option>`;
+  }).join('');
+  sel.innerHTML = placeholder + opts;
+  const valid = list.find(r => (isDaily ? r.date : r.week) === selectedKey);
+  S.viewerSelected = valid ? selectedKey : (list.length ? (isDaily ? list[0].date : list[0].week) : null);
+  if (S.viewerSelected) sel.value = S.viewerSelected;
+  if (loadContent) loadReport();
+}
+async function loadReport() {
+  S.reportLoadRequestId++;
+  const myId = S.reportLoadRequestId;
   const body = document.getElementById('viewer-body');
-  if (!body || !S.viewerSelected) return;
+  if (!body) return;
+  if (!S.viewerSelected) {
+    body.innerHTML = `<p class="text-slate-400 text-sm">${t('report.empty')}</p>`;
+    return;
+  }
+  body.innerHTML = `<div class="flex justify-center py-10"><span class="spinner" style="width:24px;height:24px;border-width:3px;"></span></div>`;
   try {
     const path = S.viewerType === 'daily'
       ? `/api/reports/daily/${S.viewerSelected}`
       : `/api/reports/weekly/${S.viewerSelected}`;
     const data = await api('GET', path);
-    body.innerHTML = renderMarkdown(data.content);
+    if (myId !== S.reportLoadRequestId) return;
+    body.innerHTML = injectTickerLinks(renderMarkdown(data.content));
   } catch (e) {
+    if (myId !== S.reportLoadRequestId) return;
     body.innerHTML = `<p class="text-red-400 text-sm">${t('err.generic', { msg: e.message })}</p>`;
   }
 }
-function switchViewerType(type) {
+function setViewerTab(type, selectedKey = '') {
   S.viewerType = type;
-  const list = type === 'daily' ? S.dailyReports : S.weeklyReports;
-  S.viewerSelected = list.length ? (type === 'daily' ? list[0].date : list[0].week) : null;
   renderViewerShell();
-  fetchViewerContent();
-}
-function selectViewerItem(val) {
-  S.viewerSelected = val;
-  fetchViewerContent();
+  populateReportSelect(selectedKey);
 }
 
 // ════════════════════════════════════════════════════════════

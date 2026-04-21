@@ -24,6 +24,7 @@ window.TRANSLATIONS.en = {
   "dashboard.weeklyList": "Weekly Reports",
 
   "report.empty": "No reports found.",
+  "report.selectPlaceholder": "Select a date",
   "report.view": "View →",
   "viewer.daily": "Daily",
   "viewer.weekly": "Weekly",

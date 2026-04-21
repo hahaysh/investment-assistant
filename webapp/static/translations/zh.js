@@ -24,6 +24,7 @@ window.TRANSLATIONS.zh = {
   "dashboard.weeklyList": "周报列表",
 
   "report.empty": "暂无报告。",
+  "report.selectPlaceholder": "选择日期",
   "report.view": "查看 →",
   "viewer.daily": "日报",
   "viewer.weekly": "周报",

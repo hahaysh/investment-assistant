@@ -24,6 +24,7 @@ window.TRANSLATIONS.ja = {
   "dashboard.weeklyList": "週次レポート一覧",
 
   "report.empty": "レポートがありません。",
+  "report.selectPlaceholder": "日付を選択",
   "report.view": "表示 →",
   "viewer.daily": "日次",
   "viewer.weekly": "週次",

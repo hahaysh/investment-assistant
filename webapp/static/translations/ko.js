@@ -24,6 +24,7 @@ window.TRANSLATIONS.ko = {
   "dashboard.weeklyList": "주간 리포트 목록",
 
   "report.empty": "리포트가 없습니다.",
+  "report.selectPlaceholder": "날짜를 선택하세요",
   "report.view": "보기 →",
   "viewer.daily": "일일",
   "viewer.weekly": "주간",

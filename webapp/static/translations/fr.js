@@ -24,6 +24,7 @@ window.TRANSLATIONS.fr = {
   "dashboard.weeklyList": "Rapports hebdomadaires",
 
   "report.empty": "Aucun rapport.",
+  "report.selectPlaceholder": "Sélectionner une date",
   "report.view": "Voir →",
   "viewer.daily": "Quotidien",
   "viewer.weekly": "Hebdomadaire",
